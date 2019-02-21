@@ -148,6 +148,7 @@ let create_static_ctor com ~empty_ctor_expr cl ctor follow_type =
 		let static_ctor = mk_class_field static_ctor_name fn_type false ctor.cf_pos (Method MethNormal) ctor_types in
 		let static_ctor_meta = match Meta.has Meta.Final cl.cl_meta with
 			| true -> Meta.Private
+			| false when cl.cl_final -> Meta.Private
 			| false -> Meta.Protected
 		in
 		static_ctor.cf_meta <- (static_ctor_meta,[],ctor.cf_pos) :: static_ctor.cf_meta;
