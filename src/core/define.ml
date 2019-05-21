@@ -15,6 +15,7 @@ type strict_defined =
 	| CoreApi
 	| CoreApiSerialize
 	| Cppia
+	| CsVer
 	| NoCppiaAst
 	| Dce
 	| DceDebug
@@ -127,6 +128,7 @@ let infos = function
 	| CoreApi -> "core_api",("Defined in the core api context",[])
 	| CoreApiSerialize -> "core_api_serialize",("Mark some generated core api classes with the Serializable attribute on C#",[Platform Cs])
 	| Cppia -> "cppia",("Generate cpp instruction assembly",[])
+	| CsVer -> "cs_ver",("The C# version to target",[Platform Cs])
 	| NoCppiaAst -> "nocppiaast",("Use legacy cppia generation",[])
 	| Dce -> "dce",("<mode:std|full|no> Set the dead code elimination mode (default std)",[])
 	| DceDebug -> "dce_debug",("Show DCE log",[])
