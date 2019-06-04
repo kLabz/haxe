@@ -1,0 +1,3 @@
+--macro define('whatever')
+-main Main
+-D no-compilation
