@@ -259,6 +259,9 @@ let make_macro_api ctx p =
 				t()
 			);
 		);
+		MacroApi.set_message_printer = (fun printer ->
+			ctx.com.print_message <- printer;
+		);
 		MacroApi.get_local_type = (fun() ->
 			match ctx.get_build_infos() with
 			| Some (mt,tl,_) ->

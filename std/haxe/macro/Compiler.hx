@@ -22,6 +22,12 @@
 package haxe.macro;
 import haxe.macro.Expr;
 
+enum Message {
+	Info(msg:String, pos:Position);
+	Warning(msg:String, pos:Position);
+	Error(msg:String, pos:Position);
+}
+
 /**
 	All these methods can be called for compiler configuration macros.
 **/
@@ -68,6 +74,10 @@ class Compiler {
 		#if (neko || eval)
 		load("define", 2)(flag,value);
 		#end
+	}
+
+	public static function setMessagePrinter( printer : Message -> Void ) {
+		load("set_custom_message_printer", 1)(printer);
 	}
 
 	#if (!neko && !eval)

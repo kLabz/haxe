@@ -27,6 +27,7 @@ type 'value compiler_api = {
 	type_patch : string -> string -> bool -> string option -> unit;
 	meta_patch : string -> string -> string option -> bool -> pos -> unit;
 	set_js_generator : (Genjs.ctx -> unit) -> unit;
+	set_message_printer : (compiler_message -> unit) -> unit;
 	get_local_type : unit -> t option;
 	get_expected_type : unit -> t option;
 	get_call_arguments : unit -> Ast.expr list option;
@@ -76,6 +77,7 @@ type enum_type =
 	| IQuoteStatus
 	| IImportMode
 	| IDisplayKind
+	| IMessage
 
 (**
 	Our access to the interpreter from the macro api
@@ -170,6 +172,7 @@ let enum_name = function
 	| IImportMode -> "ImportMode"
 	| IQuoteStatus -> "QuoteStatus"
 	| IDisplayKind -> "DisplayKind"
+	| IMessage -> "Message"
 
 let all_enums =
 	let last = IImportMode in
@@ -389,6 +392,14 @@ and encode_display_kind dk =
 	| DKPattern outermost -> 4, [vbool outermost]
 	in
 	encode_enum ~pos:None IDisplayKind tag pl
+
+and encode_message msg =
+	let tag, pl = match msg with
+		| CMInfo(msg,p) -> 0, [(encode_string msg); (encode_pos p)]
+		| CMWarning(msg,p) -> 1, [(encode_string msg); (encode_pos p)]
+		| CMError(msg,p) -> 2, [(encode_string msg); (encode_pos p)]
+	in
+	encode_enum ~pos:None IMessage tag pl
 
 and encode_expr e =
 	let rec loop (e,p) =
@@ -1659,6 +1670,13 @@ let macro_api ccom get_api =
 					);
 				] in
 				ignore(f [api]);
+			);
+			vnull
+		);
+		"set_custom_message_printer", vfun1 (fun f ->
+			let printer = prepare_callback f 1 in
+			(get_api()).set_message_printer (fun msg ->
+				ignore(printer [encode_message msg])
 			);
 			vnull
 		);

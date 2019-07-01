@@ -72,12 +72,7 @@ let check_display_flush ctx f_otherwise = match ctx.com.json_out with
 
 let default_flush ctx =
 	check_display_flush ctx (fun () ->
-		List.iter
-			(fun msg -> match msg with
-				| CMInfo _ -> print_endline (compiler_message_string msg)
-				| CMWarning _ | CMError _ -> prerr_endline (compiler_message_string msg)
-			)
-			(List.rev ctx.messages);
+		List.iter ctx.com.print_message (List.rev ctx.messages);
 		if ctx.has_error && !prompt then begin
 			print_endline "Press enter to exit...";
 			ignore(read_line());

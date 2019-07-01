@@ -63,6 +63,11 @@ let compiler_message_string msg =
 		Printf.sprintf "%s : %s" epos str
 	end
 
+let compiler_print_message msg =
+	match msg with
+		| CMInfo _ -> print_endline (compiler_message_string msg)
+		| CMWarning _ | CMError _ -> prerr_endline (compiler_message_string msg)
+
 (**
 	The capture policy tells which handling we make of captured locals
 	(the locals which are referenced in local functions)
@@ -184,6 +189,7 @@ type context = {
 	callbacks : compiler_callbacks;
 	defines : Define.define;
 	mutable print : string -> unit;
+	mutable print_message : compiler_message -> unit;
 	mutable get_macros : unit -> context option;
 	mutable run_command : string -> int;
 	file_lookup_cache : (string,string option) Hashtbl.t;
@@ -422,6 +428,7 @@ let create version s_version args =
 		platform = Cross;
 		config = default_config;
 		print = (fun s -> print_string s; flush stdout);
+		print_message = compiler_print_message;
 		run_command = Sys.command;
 		std_path = [];
 		class_path = [];
