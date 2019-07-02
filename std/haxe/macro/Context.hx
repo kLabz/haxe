@@ -25,11 +25,6 @@ package haxe.macro;
 import haxe.macro.Expr;
 import haxe.macro.Type.TypedExpr;
 
-enum Message {
-	Info(msg:String, pos:Position);
-	Warning(msg:String, pos:Position);
-}
-
 /**
 	Context provides an API for macro programming.
 
@@ -71,21 +66,6 @@ class Context {
 	**/
 	public static function info(msg:String, pos:Position) {
 		load("info", 2)(msg, pos);
-	}
-
-	/**
-		Gets a list of all current compilation info/warning messages.
-	**/
-	public static function getMessages() : Array<Message> {
-		return load("get_messages",0)();
-	}
-
-	/**
-		Filters all current info/warning messages. Filtered out messages will
-		not be displayed by the compiler.
-	**/
-	public static function filterMessages( predicate : Message -> Bool ) {
-		load("filter_messages",1)(predicate);
 	}
 
 	/**
