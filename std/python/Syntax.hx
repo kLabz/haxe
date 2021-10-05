@@ -101,4 +101,6 @@ extern class Syntax {
 	extern static function _callNamedUntyped(e:Dynamic, args:Dynamic):Dynamic;
 
 	extern static function opPow(a:Int, b:Int):Int;
+
+	extern static function opFloorDiv(a:Float, b:Float):Int;
 }

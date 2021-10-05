@@ -1566,6 +1566,8 @@ module Printer = struct
 				Printf.sprintf "%s(%s)" cls (print_exprs pctx ", " el)
 			| "python_Syntax.opPow", [e1;e2] ->
 				Printf.sprintf "(%s ** %s)" (print_expr pctx e1) (print_expr pctx e2)
+			| "python_Syntax.opFloorDiv", [e1;e2] ->
+				Printf.sprintf "(%s // %s)" (print_expr pctx e1) (print_expr pctx e2)
  			| "python_Syntax._foreach",[e1;e2;e3] ->
 				let pctx = {pctx with pc_indent = "    " ^ pctx.pc_indent} in
 				let i = pctx.pc_indent in
