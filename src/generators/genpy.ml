@@ -1568,6 +1568,22 @@ module Printer = struct
 				Printf.sprintf "(%s ** %s)" (print_expr pctx e1) (print_expr pctx e2)
 			| "python_Syntax.opFloorDiv", [e1;e2] ->
 				Printf.sprintf "(%s // %s)" (print_expr pctx e1) (print_expr pctx e2)
+			| "python_Syntax.bytes", [e] ->
+				(match e.eexpr with
+					| TConst (TString e) -> Printf.sprintf "b'%s'" e
+					| _ ->
+						pctx.pc_com.error "Argument(s) of python.Syntax.bytes() must be constant string(s)." e.epos;
+						""
+				)
+			| "python_Syntax.bytes", exprs ->
+				let i = pctx.pc_indent in
+				(List.fold_left (fun acc e ->
+					match e.eexpr with
+						| TConst (TString e) -> acc ^ (Printf.sprintf "%s    b'%s'\n" i e)
+						| _ ->
+							pctx.pc_com.error "Argument(s) of python.Syntax.bytes() must be constant string(s)." e.epos;
+							""
+				) "(\n" exprs) ^ (Printf.sprintf "%s)" i)
  			| "python_Syntax._foreach",[e1;e2;e3] ->
 				let pctx = {pctx with pc_indent = "    " ^ pctx.pc_indent} in
 				let i = pctx.pc_indent in

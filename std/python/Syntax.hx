@@ -93,6 +93,8 @@ extern class Syntax {
 
 	extern static function _tuple(args:Array<Dynamic>):Dynamic;
 
+	extern static function bytes(...s:String):python.Bytes;
+
 	@:noUsing
 	extern static function varArgs(args:Array<Dynamic>):Dynamic;
 
