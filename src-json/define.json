@@ -543,6 +543,12 @@
 		"params": ["version"]
 	},
 	{
+		"name": "PythonUnsafeArrayAccess",
+		"define": "python.unsafe_array_access",
+		"doc": "Disable array access safety for smaller output",
+		"platforms": ["python"]
+	},
+	{
 		"name": "RealPosition",
 		"define": "real_position",
 		"doc": "Disables Haxe source mapping when targetting C#, removes position comments in Java and Php output.",

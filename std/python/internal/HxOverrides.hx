@@ -182,11 +182,15 @@ class HxOverrides {
 
 	@:ifFeature("dynamic_array_read")
 	static public function arrayGet<T>(a:Dynamic, i:Int):Dynamic {
+		#if python.unsafe_array_access
+		return Syntax.arrayAccess(a, i);
+		#else
 		if (Boot.isArray(a)) {
 			return ArrayImpl._get(a, i);
 		} else {
 			return Syntax.arrayAccess(a, i);
 		}
+		#end
 	}
 
 	@:ifFeature("dynamic_array_write")

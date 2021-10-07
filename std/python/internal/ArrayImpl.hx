@@ -166,10 +166,12 @@ class ArrayImpl {
 		Syntax.callField(a, "reverse");
 	}
 
+	#if !python.unsafe_array_access
 	@:ifFeature("array_read")
 	private static inline function _get<T>(x:Array<T>, idx:Int):T {
 		return if (idx > -1 && idx < x.length) unsafeGet(x, idx) else null;
 	}
+	#end
 
 	@:ifFeature("array_write")
 	private static inline function _set<T>(x:Array<T>, idx:Int, v:T):T {

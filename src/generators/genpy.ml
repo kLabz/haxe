@@ -1175,24 +1175,28 @@ module Printer = struct
 	and print_tarray_list pctx e1 e2 =
 		let s1 = (print_expr pctx e1) in
 		let s2 = (print_expr pctx e2) in
-		let default = Printf.sprintf "python_internal_ArrayImpl._get(%s, %s)" s1 s2 in
+		if defined pctx.pc_com Define.PythonUnsafeArrayAccess then
+			Printf.sprintf "%s[%s]" s1 s2
+		else begin
+			let default = Printf.sprintf "python_internal_ArrayImpl._get(%s, %s)" s1 s2 in
 
-		let handle_index =
-			match e2.eexpr with
-			| TConst TInt index ->
-				if Int32.to_int index >= 0 then
-					Printf.sprintf "(%s[%s] if %s < len(%s) else None)" s1 s2 s2 s1
-				else
-					"None"
-			| TLocal _ ->
-				Printf.sprintf "(%s[%s] if %s >= 0 and %s < len(%s) else None)" s1 s2 s2 s2 s1
-			| _ ->
-				default
-		in
-		match e1.eexpr with
-		| TLocal _ -> handle_index
-		| TField ({eexpr=(TConst TThis | TLocal _)},_) -> handle_index
-		| _ -> default
+			let handle_index =
+				match e2.eexpr with
+				| TConst TInt index ->
+					if Int32.to_int index >= 0 then
+						Printf.sprintf "(%s[%s] if %s < len(%s) else None)" s1 s2 s2 s1
+					else
+						"None"
+				| TLocal _ ->
+					Printf.sprintf "(%s[%s] if %s >= 0 and %s < len(%s) else None)" s1 s2 s2 s2 s1
+				| _ ->
+					default
+			in
+			match e1.eexpr with
+			| TLocal _ -> handle_index
+			| TField ({eexpr=(TConst TThis | TLocal _)},_) -> handle_index
+			| _ -> default
+		end;
 
 	and is_safe_string pctx x =
 		let follow_parens e = match e.eexpr with
