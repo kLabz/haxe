@@ -26,8 +26,8 @@ import python.Bytes;
 import python.Tuple;
 
 class NativeStringTools {
-	public static function format(s:String, args:Array<Dynamic>):String {
-		return python.Syntax.field(s, "format")(python.Syntax.varArgs(args));
+	public static inline function format(s:String, ...args:Dynamic):String {
+		return (python.Syntax.field(s, "format"):(...args:Dynamic)->String)(...args);
 	}
 
 	public static inline function encode(s:String, encoding:String = "utf-8", errors:String = "strict"):Bytes {

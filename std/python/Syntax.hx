@@ -96,6 +96,7 @@ extern class Syntax {
 	extern static function bytes(...s:String):python.Bytes;
 
 	@:noUsing
+	@:overload(function(...args:Dynamic):Dynamic {})
 	extern static function varArgs(args:Array<Dynamic>):Dynamic;
 
 	macro public static function callNamedUntyped(e:haxe.macro.Expr, args:haxe.macro.Expr):haxe.macro.Expr;
