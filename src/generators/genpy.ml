@@ -2099,23 +2099,24 @@ module Generator = struct
 					with Exit -> ()
 				in
 
-				(try (
-					let real_fields =
-						List.filter (fun f -> match f.cf_kind with
-							| Method MethDynamic -> raise Exit (* if a class has dynamic method, we can't use __slots__ because python will complain *)
-							| Var _ -> is_physical_field f
-							| _ -> false
-						) c.cl_ordered_fields
-					in
-					let field_names = List.map (fun f -> handle_keywords f.cf_name) real_fields in
-					use_pass := false;
-					print ctx "\n    __slots__ = (";
-					(match field_names with
-					| [] -> ()
-					| [name] -> print ctx "\"%s\"," name
-					| names -> print ctx "\"%s\"" (String.concat "\", \"" names));
-					print ctx ")";
-				) with Exit -> ());
+				if not (defined ctx.com Define.PythonNoSlots) then
+					(try (
+						let real_fields =
+							List.filter (fun f -> match f.cf_kind with
+								| Method MethDynamic -> raise Exit (* if a class has dynamic method, we can't use __slots__ because python will complain *)
+								| Var _ -> is_physical_field f
+								| _ -> false
+							) c.cl_ordered_fields
+						in
+						let field_names = List.map (fun f -> handle_keywords f.cf_name) real_fields in
+						use_pass := false;
+						print ctx "\n    __slots__ = (";
+						(match field_names with
+						| [] -> ()
+						| [name] -> print ctx "\"%s\"," name
+						| names -> print ctx "\"%s\"" (String.concat "\", \"" names));
+						print ctx ")";
+					) with Exit -> ());
 
 				print_field x.cfd_fields "_hx_fields" true;
 				print_field x.cfd_methods "_hx_methods" true;
@@ -2183,7 +2184,8 @@ module Generator = struct
 		newline ctx;
 		newline ctx;
 		print ctx "class %s(Enum):" p;
-		print ctx "\n    __slots__ = ()";
+		if not (defined ctx.com Define.PythonNoSlots) then
+			print ctx "\n    __slots__ = ()";
 
 		if has_feature ctx "python._hx_class_name" then begin
 			print ctx "\n    _hx_class_name = \"%s\"" p_name

@@ -543,6 +543,12 @@
 		"params": ["version"]
 	},
 	{
+		"name": "PythonNoSlots",
+		"define": "python.no_slots",
+		"doc": "Disable __slots__ generation (mostly for micropython)",
+		"platforms": ["python"]
+	},
+	{
 		"name": "PythonUnsafeArrayAccess",
 		"define": "python.unsafe_array_access",
 		"doc": "Disable array access safety for smaller output",
