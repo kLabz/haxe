@@ -31,6 +31,10 @@ class NativeArrayTools {
 		python.Syntax.field(a, "append")(x);
 	}
 
+	public static inline function nativeSort<T, TKey>(a:Array<T>, key:T->TKey):Void {
+		python.Syntax.code('{0}.sort(key = {1})', a, key);
+	}
+
 	public static inline function contains<T>(a:Array<T>, x:T):Bool {
 		return python.Syntax.isIn(x, a);
 	}
