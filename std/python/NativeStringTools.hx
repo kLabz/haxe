@@ -42,6 +42,10 @@ class NativeStringTools {
 		return python.Syntax.field(s, "strip")(chars);
 	}
 
+	public static inline function rstrip(s:String, ?chars:String):String {
+		return python.Syntax.field(s, "rstrip")(chars);
+	}
+
 	public static inline function rpartition(s:String, sep:String):Tuple3<String, String, String> {
 		return python.Syntax.field(s, "rpartition")(sep);
 	}
