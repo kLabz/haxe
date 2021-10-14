@@ -31,6 +31,10 @@ class NativeArrayTools {
 		python.Syntax.field(a, "append")(x);
 	}
 
+	public static inline function last<T>(a:Array<T>):T {
+		return python.Syntax.code('{0}.pop(next(iter({0})))', a);
+	}
+
 	public static inline function nativeSort<T, TKey>(a:Array<T>, key:T->TKey):Void {
 		python.Syntax.code('{0}.sort(key = {1})', a, key);
 	}
