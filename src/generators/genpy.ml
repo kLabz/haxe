@@ -1649,6 +1649,8 @@ module Printer = struct
 				else
 					let s1 = native_fields_str native_fields in
 					Printf.sprintf "python__KwArgs_KwArgs_Impl_.toDictHelper(HxOverrides.reverseMapKwArgs(%s, {%s}), None)" (print_expr pctx e2) s1
+			| TField(x, (FInstance(_,_,f) | FStatic(_,f) | FAnon(f))), _ when Meta.has Meta.SelfCall f.cf_meta ->
+				print_call2 pctx x el
 			| _,_ ->
 				print_call2 pctx e1 el
 
