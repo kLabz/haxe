@@ -1571,7 +1571,7 @@ module Printer = struct
 			| "python_Syntax.opPow", [e1;e2] ->
 				Printf.sprintf "(%s ** %s)" (print_expr pctx e1) (print_expr pctx e2)
 			| "python_Syntax.opFloorDiv", [e1;e2] ->
-				Printf.sprintf "(%s // %s)" (print_expr pctx e1) (print_expr pctx e2)
+				Printf.sprintf "int(%s // %s)" (print_expr pctx e1) (print_expr pctx e2)
 			| "python_Syntax.bytes", [e] ->
 				(match e.eexpr with
 					| TConst (TString e) -> Printf.sprintf "b'%s'" e
