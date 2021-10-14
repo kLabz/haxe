@@ -26,6 +26,7 @@ import python.Exceptions.BaseException;
 import python.lib.io.FileIO;
 import python.lib.io.RawIOBase;
 import python.lib.io.TextIOBase;
+import python.lib.io.StringIO;
 import python.Tuple;
 
 extern class TB {}
@@ -52,6 +53,7 @@ extern class Sys {
 
 	static var maxsize:Int;
 
+	static function print_exception<T:BaseException>(e:T, out:StringIO):Void;
 	static function exc_info<T:BaseException>():Tuple3<Class<T>, T, TB>;
 
 	static var version_info:Tuple5<Int, Int, Int, String, Int>;
