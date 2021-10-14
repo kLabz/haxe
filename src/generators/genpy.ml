@@ -1579,6 +1579,8 @@ module Printer = struct
 						pctx.pc_com.error "Argument(s) of python.Syntax.bytes() must be constant string(s)." e.epos;
 						""
 				)
+			| ("python_Syntax.substr" | "python_Syntax.sub"), [es;estart;eend] ->
+				Printf.sprintf "%s[%s:%s]" (print_expr pctx es) (print_expr pctx estart) (print_expr pctx eend)
 			| "python_Syntax.bytes", exprs ->
 				let i = pctx.pc_indent in
 				(List.fold_left (fun acc e ->
