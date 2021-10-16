@@ -69,7 +69,7 @@ extern class Builtins {
 	static function ord(s:String):Int;
 	static function str(o:Dynamic):String;
 
-	// static function eval():Void;
+	static function eval(expression:String, ?globals:Dict<Dynamic, Dynamic>, ?locals:Dict<Dynamic, Dynamic>):Any;
 	// static function pow():Void;
 	// static function sum():Void;
 	// static function basestring():Void;
@@ -87,7 +87,10 @@ extern class Builtins {
 		static function tuple<X>(a:Array<X>):Tuple<X>;
 	 */
 	// static function range():Void;
-	static function type():Void;
+
+	// TODO: ?bases, ?dict
+	// See https://www.w3schools.com/python/ref_func_type.asp
+	static function type<T>(o:T):Class<T>;
 	/*
 		@:overload(function (it:Array<Int>):python.Bytearray {})
 		@:overload(function (it:NativeIterable<Int>):python.Bytearray {})

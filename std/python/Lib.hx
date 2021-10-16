@@ -40,10 +40,6 @@ class Lib {
 	static inline function get___name__():String
 		return python.Syntax.code('__name__');
 
-	public static inline function getType<T>(o:T):Class<T> {
-		return python.Syntax.code('type({0})', o);
-	}
-
 	/**
 		Print the specified value on the default output.
 	**/
