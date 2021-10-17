@@ -57,4 +57,8 @@ class NativeStringTools {
 	public static inline function endswith(s:String, suffix:String):Bool {
 		return python.Syntax.field(s, "endswith")(suffix);
 	}
+
+	public static function replace(s:String, sub:String, by:String, ?count:Null<Int> = null):String {
+		return python.Syntax.field(s, "replace")(sub, by, count);
+	}
 }
