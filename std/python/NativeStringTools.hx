@@ -59,6 +59,7 @@ class NativeStringTools {
 	}
 
 	public static function replace(s:String, sub:String, by:String, ?count:Null<Int> = null):String {
+		if (count == null) return python.Syntax.field(s, "replace")(sub, by);
 		return python.Syntax.field(s, "replace")(sub, by, count);
 	}
 }
