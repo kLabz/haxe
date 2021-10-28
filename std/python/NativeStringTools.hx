@@ -42,7 +42,11 @@ class NativeStringTools {
 		return python.Syntax.field(s, "strip")(chars);
 	}
 
-	public static inline function rstrip(s:String, ?chars:String):String {
+	overload public static extern inline function rstrip(s:String):String {
+		return python.Syntax.field(s, "rstrip")();
+	}
+
+	overload public static extern inline function rstrip(s:String, chars:String):String {
 		return python.Syntax.field(s, "rstrip")(chars);
 	}
 
@@ -58,8 +62,11 @@ class NativeStringTools {
 		return python.Syntax.field(s, "endswith")(suffix);
 	}
 
-	public static function replace(s:String, sub:String, by:String, ?count:Null<Int> = null):String {
-		if (count == null) return python.Syntax.field(s, "replace")(sub, by);
+	overload public static extern inline function replace(s:String, sub:String, by:String):String {
+		return python.Syntax.field(s, "replace")(sub, by);
+	}
+
+	overload public static extern inline function replace(s:String, sub:String, by:String, count:Int):String {
 		return python.Syntax.field(s, "replace")(sub, by, count);
 	}
 }
