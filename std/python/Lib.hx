@@ -60,6 +60,8 @@ class Lib {
 		printString('$str$lineEnd');
 	}
 
+	public static inline function pass():Void python.Syntax.code('pass');
+
 	/**
 		Returns an anonymous Object which holds the same data as the Dictionary `v`.
 	**/
