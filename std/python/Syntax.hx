@@ -108,4 +108,6 @@ extern class Syntax {
 	extern static function opPow(a:Int, b:Int):Int;
 
 	extern static function opFloorDiv(a:Float, b:Float):Int;
+
+	extern static function positional<T>(argName:String, value:T):T;
 }
