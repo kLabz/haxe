@@ -1557,6 +1557,10 @@ module Printer = struct
 				Printf.sprintf "(%s in %s)" (print_expr pctx e1) (print_expr pctx e2)
 			| "python_Syntax.delete",[e1] ->
 				Printf.sprintf "del %s" (print_expr pctx e1)
+			| "python_Syntax.exec",[e1] ->
+				Printf.sprintf "exec(%s)" (print_expr pctx e1)
+			| "python_Syntax.eval",[e1] ->
+				Printf.sprintf "eval(%s)" (print_expr pctx e1)
 			| "python_Syntax.binop",[e0;{eexpr = TConst(TString id)};e2] ->
 				Printf.sprintf "(%s %s %s)" (print_expr pctx e0) id (print_expr pctx e2)
 			| "python_Syntax.assign",[e0;e1] ->

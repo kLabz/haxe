@@ -48,6 +48,12 @@ extern class Syntax {
 	extern static function delete(a:Dynamic):Void;
 
 	@:noUsing
+	extern static function exec(code:String):Void;
+
+	@:noUsing
+	extern static function eval(code:String):Any;
+
+	@:noUsing
 	extern static function binop(a:Dynamic, op:String, b:Dynamic):Dynamic;
 
 	@:noUsing
