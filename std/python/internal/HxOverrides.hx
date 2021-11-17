@@ -195,12 +195,17 @@ class HxOverrides {
 
 	@:ifFeature("dynamic_array_write")
 	static public function arraySet(a:Dynamic, i:Int, v:Dynamic) {
+		#if python.unsafe_array_access
+		Syntax.assign(Syntax.arrayAccess(a, i), v);
+		return v;
+		#else
 		if (Boot.isArray(a)) {
 			return ArrayImpl._set(a, i, v);
 		} else {
 			Syntax.assign(Syntax.arrayAccess(a, i), v);
 			return v;
 		}
+		#end
 	}
 
 	@:ifFeature("python._KwArgs.KwArgs_Impl_.fromT")

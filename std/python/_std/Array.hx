@@ -130,7 +130,11 @@ extern class Array<T> implements ArrayAccess<T> {
 	}
 
 	@:keep private inline function _set(idx:Int, val:T):T {
+		#if python.unsafe_array_access
+		return ArrayImpl.unsafeSet(this, idx, val);
+		#else
 		return ArrayImpl._set(this, idx, val);
+		#end
 	}
 
 	@:keep private inline function unsafeGet(idx:Int):T {

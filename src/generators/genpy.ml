@@ -1234,7 +1234,10 @@ module Printer = struct
 			| TArray(e1,e2) ->
 				Printf.sprintf "%s[%s]" (print_expr pctx e1) (print_expr pctx e2)
 			| TBinop(OpAssign, {eexpr = TArray(e1,e2)}, e3) when (is_type1 "" "list")(e1.etype) || is_underlying_array e1.etype ->
-				Printf.sprintf "python_internal_ArrayImpl._set(%s, %s, %s)" (print_expr pctx e1) (print_expr pctx e2) (print_expr pctx e3)
+				if defined pctx.pc_com Define.PythonUnsafeArrayAccess then
+					Printf.sprintf "%s[%s] = %s" (print_expr pctx e1) (print_expr pctx e2) (print_expr pctx e3)
+				else
+					Printf.sprintf "python_internal_ArrayImpl._set(%s, %s, %s)" (print_expr pctx e1) (print_expr pctx e2) (print_expr pctx e3)
 			| TBinop(OpAssign,{eexpr = TArray({etype = t} as e1,e2)},e3) when is_anon_or_dynamic t ->
 				Printf.sprintf "HxOverrides.arraySet(%s,%s,%s)" (print_expr pctx e1) (print_expr pctx e2) (print_expr pctx e3)
 			| TBinop(OpAssign,{eexpr = TArray(e1,e2)},e3) ->

@@ -171,7 +171,6 @@ class ArrayImpl {
 	private static inline function _get<T>(x:Array<T>, idx:Int):T {
 		return if (idx > -1 && idx < x.length) unsafeGet(x, idx) else null;
 	}
-	#end
 
 	@:ifFeature("array_write")
 	private static inline function _set<T>(x:Array<T>, idx:Int, v:T):T {
@@ -187,6 +186,7 @@ class ArrayImpl {
 		}
 		return v;
 	}
+	#end
 
 	public static inline function unsafeGet<T>(x:Array<T>, idx:Int):T {
 		return Syntax.arrayAccess(x, idx);
@@ -200,7 +200,11 @@ class ArrayImpl {
 	public static inline function resize<T>(x:Array<T>, len:Int):Void {
 		var l = x.length;
 		if (l < len) {
+			#if python.unsafe_array_access
+			unsafeSet(x, len - 1, null);
+			#else
 			_set(x, len - 1, null);
+			#end
 		} else if (l > len) {
 			splice(x, len, l - len);
 		}
