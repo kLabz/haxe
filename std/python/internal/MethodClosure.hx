@@ -31,7 +31,7 @@ class MethodClosure {
 		this.func = func;
 	}
 
-	@:keep public function __call__(args:VarArgs<Dynamic>) {
+	public function __call__(args:VarArgs<Dynamic>) {
 		return this.func(this.obj, args);
 	}
 }
