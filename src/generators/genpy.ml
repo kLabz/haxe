@@ -22,6 +22,7 @@ open Ast
 open Type
 open Common
 open Texpr.Builder
+open ExtString
 
 module Utils = struct
 	let class_of_module_type mt = match mt with
@@ -2081,7 +2082,7 @@ module Generator = struct
 			newline ctx;
 			let py_metas = filter_py_metas c.cl_meta in
 			gen_py_metas ctx py_metas "";
-			print ctx "class %s" p;
+			print ctx "class %s" (List.hd (List.rev (String.nsplit p ".")));
 			(match p_super with Some p -> print ctx "(%s)" p | _ -> ());
 			spr ctx ":";
 
