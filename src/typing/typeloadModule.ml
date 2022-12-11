@@ -826,7 +826,7 @@ let load_module' ctx g m p =
 let load_module ctx m p =
 	let m2 = load_module' ctx ctx.g m p in
 	add_dependency ctx.m.curmod m2;
-	if ctx.pass = PTypeField then flush_pass ctx PConnectField "load_module";
+	if ctx.pass = PTypeField then flush_pass ctx PBuildClass "load_module";
 	m2
 
 (* let load_module ctx m p =
