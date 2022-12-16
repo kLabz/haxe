@@ -527,7 +527,7 @@ jobs:
         id: cache-opam
         uses: actions/cache@v2
         with:
-          path: /home/runner/.opam/
+          path: /Users/runner/.opam/
           key: ${{ runner.os }}-${{ hashFiles('./opam') }}
 
       - name: Install Neko from S3
