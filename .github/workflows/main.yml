@@ -56,7 +56,7 @@ jobs:
         shell: pwsh
         run: Write-Host "::add-path::C:\ProgramData\chocolatey\bin"
 
-      - name: Install OCaml
+      - name: Install OCaml and OCaml libraries
         shell: pwsh
         run: |
           Set-PSDebug -Trace 1
@@ -71,12 +71,7 @@ jobs:
           & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'cd "$OLDPWD" && tar -C / -xvf libmbedtls.tar.xz')
           & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'cd "$OLDPWD" && tar -xf opam.tar.xz')
           & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'cd "$OLDPWD" && bash opam${ARCH}/install.sh')
-
-      - name: Install OCaml libraries
-        shell: pwsh
-        run: |
-          Set-PSDebug -Trace 1
-          & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'opam init mingw "https://github.com/fdopen/opam-repository-mingw.git#opam2" --comp 4.07.0+mingw${ARCH}c --switch 4.07.0_mingw${ARCH}c --auto-setup --yes 2>&1')
+          & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'opam init mingw "https://github.com/fdopen/opam-repository-mingw.git#opam2" --comp 4.07.0+mingw${ARCH}c --switch 4.07.0+mingw${ARCH}c --auto-setup --yes 2>&1')
           & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'opam update --yes 2>&1')
           & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'cd "$OLDPWD" && opam pin add haxe . --kind=path --no-action --yes 2>&1')
           & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'opam install haxe --deps-only --yes 2>&1')
@@ -116,6 +111,7 @@ jobs:
         with:
           name: win${{env.ARCH}}Binaries
           path: out
+
 
   windows-build:
     runs-on: windows-latest
@@ -159,7 +155,7 @@ jobs:
         shell: pwsh
         run: Write-Host "::add-path::C:\ProgramData\chocolatey\bin"
 
-      - name: Install OCaml
+      - name: Install OCaml and OCaml libraries
         shell: pwsh
         run: |
           Set-PSDebug -Trace 1
@@ -174,12 +170,7 @@ jobs:
           & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'cd "$OLDPWD" && tar -C / -xvf libmbedtls.tar.xz')
           & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'cd "$OLDPWD" && tar -xf opam.tar.xz')
           & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'cd "$OLDPWD" && bash opam${ARCH}/install.sh')
-
-      - name: Install OCaml libraries
-        shell: pwsh
-        run: |
-          Set-PSDebug -Trace 1
-          & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'opam init mingw "https://github.com/fdopen/opam-repository-mingw.git#opam2" --comp 4.07.0+mingw${ARCH}c --switch 4.07.0_mingw${ARCH}c --auto-setup --yes 2>&1')
+          & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'opam init mingw "https://github.com/fdopen/opam-repository-mingw.git#opam2" --comp 4.07.0+mingw${ARCH}c --switch 4.07.0+mingw${ARCH}c --auto-setup --yes 2>&1')
           & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'opam update --yes 2>&1')
           & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'cd "$OLDPWD" && opam pin add haxe . --kind=path --no-action --yes 2>&1')
           & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'opam install haxe --deps-only --yes 2>&1')
@@ -220,12 +211,12 @@ jobs:
           name: win${{env.ARCH}}Binaries
           path: out
 
+
   linux-build:
     runs-on: ubuntu-20.04
     env:
       PLATFORM: linux64
       OPAMYES: 1
-
     steps:
       - uses: actions/checkout@main
         with:
@@ -235,10 +226,10 @@ jobs:
         id: cache-opam
         uses: actions/cache@v3.0.11
         with:
-          path: /home/runner/.opam/
+          path: ~/.opam/
           key: ${{ runner.os }}-${{ hashFiles('./opam') }}
 
-      - name: Install Neko using snapshot from S3
+      - name: Install Neko from S3
         run: |
           set -ex
 
@@ -254,6 +245,7 @@ jobs:
 
       - name: Print Neko version
         run: neko -version 2>&1
+
 
       - name: Install dependencies
         run: |
@@ -301,7 +293,7 @@ jobs:
           path: extra/doc
 
   linux-test:
-    needs: [linux-build]
+    needs: linux-build
     runs-on: ubuntu-20.04
     env:
       PLATFORM: linux64
@@ -327,8 +319,7 @@ jobs:
         with:
           name: linuxBinaries
 
-      - name: Install Neko using snapshot from S3 (Unix)
-        if: ${{ !startsWith(env.PLATFORM, 'windows') }}
+      - name: Install Neko from S3
         run: |
           set -ex
 
@@ -342,18 +333,9 @@ jobs:
           sudo ln -s $NEKOPATH/*.ndll                         /usr/local/lib/neko/
           echo "NEKOPATH=$NEKOPATH" >> $GITHUB_ENV
 
-      - name: Install Neko using snapshot from S3 (Windows)
-        if: ${{ startsWith(env.PLATFORM, 'windows') }}
-        shell: pwsh
-        run: |
-          Invoke-WebRequest https://build.haxe.org/builds/neko/$env:PLATFORM/neko_latest.zip -OutFile $env:RUNNER_TEMP/neko_latest.zip
-          Expand-Archive $env:RUNNER_TEMP/neko_latest.zip -DestinationPath $env:RUNNER_TEMP
-          $NEKOPATH = Get-ChildItem $env:RUNNER_TEMP/neko-*-*
-          echo "$NEKOPATH" >> $env:GITHUB_PATH
-          echo "NEKOPATH=$NEKOPATH" >> $env:GITHUB_ENV
-
       - name: Print Neko version
         run: neko -version 2>&1
+
 
       - name: Setup Haxe
         run: |
@@ -448,7 +430,7 @@ jobs:
           path: out/linux/arm64
 
   linux-arm64-test:
-    needs: [linux-arm64-build]
+    needs: linux-arm64-build
     runs-on: ubuntu-18.04
     permissions:
       packages: write
@@ -482,7 +464,6 @@ jobs:
           echo "CONTAINER_TAG=$(echo ${{ github.ref_name }} | sed -e 's/[^A-Za-z0-9\.]/-/g')" >> $GITHUB_ENV;
 
       - name: Build devcontainer
-        # TODO: not really multiarch anymore...
         run: earthly +devcontainer-multiarch --IMAGE_NAME="ghcr.io/${CONTAINER_REG}_devcontainer" --IMAGE_TAG="${CONTAINER_TAG}"
         env:
           EARTHLY_PUSH: "${{ github.event_name == 'push' }}"
