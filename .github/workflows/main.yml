@@ -21,7 +21,6 @@ jobs:
       ACTIONS_ALLOW_UNSECURE_COMMANDS: true
       PLATFORM: windows64
       OPAMYES: 1
-      OPAMROOT: D:\.opam
       CYG_MIRROR: http://mirrors.kernel.org/sourceware/cygwin/
       ARCH: 64
       MINGW_ARCH: x86_64
@@ -31,13 +30,6 @@ jobs:
       - uses: actions/checkout@main
         with:
           submodules: recursive
-
-      - name: Cache opam
-        id: cache-opam
-        uses: actions/cache@v3.0.11
-        with:
-          path: D:\.opam
-          key: ${{ runner.os }}64-${{ hashFiles('./opam') }}-1
 
       - name: Install Neko from S3
         shell: pwsh
@@ -81,7 +73,6 @@ jobs:
           & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'cd "$OLDPWD" && bash opam${ARCH}/install.sh')
 
       - name: Install OCaml libraries
-        if: steps.cache-opam.outputs.cache-hit != 'true'
         shell: pwsh
         run: |
           Set-PSDebug -Trace 1
@@ -91,13 +82,6 @@ jobs:
           & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'opam install haxe --deps-only --yes 2>&1')
           & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'opam list')
           & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'ocamlopt -v')
-
-      # - name: Fixup opam cache
-      #   if: steps.cache-opam.outputs.cache-hit == 'true'
-      #   shell: pwsh
-      #   run: |
-      #     Set-PSDebug -Trace 1
-      #     & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'mv ${OPAMROOT}/4.07.0_mingw${ARCH}c "${OPAMROOT}/4.07.0+mingw${ARCH}c"')
 
       - name: Expose mingw dll files
         shell: pwsh
@@ -133,21 +117,12 @@ jobs:
           name: win${{env.ARCH}}Binaries
           path: out
 
-      - name: Prepare opam cache
-        if: steps.cache-opam.outputs.cache-hit != 'true'
-        shell: pwsh
-        run: |
-          Set-PSDebug -Trace 1
-          & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'ls ${OPAMROOT}/')
-          # & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'mv "${OPAMROOT}/4.07.0+mingw${ARCH}c" ${OPAMROOT}/4.07.0_mingw${ARCH}c')
-
   windows-build:
     runs-on: windows-latest
     env:
       ACTIONS_ALLOW_UNSECURE_COMMANDS: true
       PLATFORM: windows
       OPAMYES: 1
-      OPAMROOT: D:\.opam
       CYG_MIRROR: http://mirrors.kernel.org/sourceware/cygwin/
       ARCH: 32
       MINGW_ARCH: i686
@@ -158,13 +133,6 @@ jobs:
       - uses: actions/checkout@main
         with:
           submodules: recursive
-
-      - name: Cache opam
-        id: cache-opam
-        uses: actions/cache@v3.0.11
-        with:
-          path: D:\.opam
-          key: ${{ runner.os }}32-${{ hashFiles('./opam') }}-1
 
       - name: Install Neko from S3
         shell: pwsh
@@ -208,7 +176,6 @@ jobs:
           & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'cd "$OLDPWD" && bash opam${ARCH}/install.sh')
 
       - name: Install OCaml libraries
-        if: steps.cache-opam.outputs.cache-hit != 'true'
         shell: pwsh
         run: |
           Set-PSDebug -Trace 1
@@ -218,13 +185,6 @@ jobs:
           & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'opam install haxe --deps-only --yes 2>&1')
           & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'opam list')
           & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'ocamlopt -v')
-
-      # - name: Fixup opam cache
-      #   if: steps.cache-opam.outputs.cache-hit == 'true'
-      #   shell: pwsh
-      #   run: |
-      #     Set-PSDebug -Trace 1
-      #     & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'mv ${OPAMROOT}/4.07.0_mingw${ARCH}c "${OPAMROOT}/4.07.0+mingw${ARCH}c"')
 
       - name: Expose mingw dll files
         shell: pwsh
@@ -260,17 +220,8 @@ jobs:
           name: win${{env.ARCH}}Binaries
           path: out
 
-      - name: Prepare opam cache
-        if: steps.cache-opam.outputs.cache-hit != 'true'
-        shell: pwsh
-        run: |
-          Set-PSDebug -Trace 1
-          & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'ls ${OPAMROOT}/')
-          # & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'mv "${OPAMROOT}/4.07.0+mingw${ARCH}c" ${OPAMROOT}/4.07.0_mingw${ARCH}c')
-
   linux-build:
     runs-on: ubuntu-20.04
-    # runs-on: ubuntu-18.04
     env:
       PLATFORM: linux64
       OPAMYES: 1
