@@ -92,6 +92,13 @@ jobs:
           & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'opam list')
           & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'ocamlopt -v')
 
+      - name: Fixup opam cache
+        if: steps.cache-opam.outputs.cache-hit == 'true'
+        shell: pwsh
+        run: |
+          Set-PSDebug -Trace 1
+          & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'mv ${OPAMROOT}/4.07.0_mingw${ARCH}c "${OPAMROOT}/4.07.0+mingw${ARCH}c"')
+
       - name: Expose mingw dll files
         shell: pwsh
         run: Write-Host "::add-path::${env:CYG_ROOT}/usr/$($env:MINGW_ARCH)-w64-mingw32/sys-root/mingw/bin"
@@ -126,6 +133,12 @@ jobs:
           name: win${{env.ARCH}}Binaries
           path: out
 
+      - name: Prepare opam cache
+        if: steps.cache-opam.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          Set-PSDebug -Trace 1
+          & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'mv "${OPAMROOT}/4.07.0+mingw${ARCH}c" ${OPAMROOT}/4.07.0_mingw${ARCH}c')
 
   windows-build:
     runs-on: windows-latest
@@ -205,6 +218,13 @@ jobs:
           & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'opam list')
           & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'ocamlopt -v')
 
+      - name: Fixup opam cache
+        if: steps.cache-opam.outputs.cache-hit == 'true'
+        shell: pwsh
+        run: |
+          Set-PSDebug -Trace 1
+          & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'mv ${OPAMROOT}/4.07.0_mingw${ARCH}c "${OPAMROOT}/4.07.0+mingw${ARCH}c"')
+
       - name: Expose mingw dll files
         shell: pwsh
         run: Write-Host "::add-path::${env:CYG_ROOT}/usr/$($env:MINGW_ARCH)-w64-mingw32/sys-root/mingw/bin"
@@ -239,6 +259,12 @@ jobs:
           name: win${{env.ARCH}}Binaries
           path: out
 
+      - name: Prepare opam cache
+        if: steps.cache-opam.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          Set-PSDebug -Trace 1
+          & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'mv "${OPAMROOT}/4.07.0+mingw${ARCH}c" ${OPAMROOT}/4.07.0_mingw${ARCH}c')
 
   linux-build:
     runs-on: ubuntu-20.04
