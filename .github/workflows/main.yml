@@ -36,7 +36,7 @@ jobs:
         uses: actions/cache@v3.0.11
         with:
           path: C:/cygwin/home/runneradmin/.opam
-          key: ${{ runner.os }}64-${{ hashFiles('./opam') }}
+          key: ${{ runner.os }}64-${{ hashFiles('./opam') }}-1
 
       - name: Install Neko from S3
         shell: pwsh
@@ -63,7 +63,7 @@ jobs:
         shell: pwsh
         run: Write-Host "::add-path::C:\ProgramData\chocolatey\bin"
 
-      - name: Install OCaml and OCaml libraries
+      - name: Install OCaml
         shell: pwsh
         run: |
           Set-PSDebug -Trace 1
@@ -148,7 +148,7 @@ jobs:
         uses: actions/cache@v3.0.11
         with:
           path: C:/cygwin/home/runneradmin/.opam
-          key: ${{ runner.os }}32-${{ hashFiles('./opam') }}
+          key: ${{ runner.os }}32-${{ hashFiles('./opam') }}-1
 
       - name: Install Neko from S3
         shell: pwsh
@@ -175,7 +175,7 @@ jobs:
         shell: pwsh
         run: Write-Host "::add-path::C:\ProgramData\chocolatey\bin"
 
-      - name: Install OCaml and OCaml libraries
+      - name: Install OCaml
         shell: pwsh
         run: |
           Set-PSDebug -Trace 1
