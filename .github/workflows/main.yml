@@ -85,19 +85,19 @@ jobs:
         shell: pwsh
         run: |
           Set-PSDebug -Trace 1
-          & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'opam init mingw "https://github.com/fdopen/opam-repository-mingw.git#opam2" --comp 4.07.0+mingw${ARCH}c --switch 4.07.0+mingw${ARCH}c --auto-setup --yes 2>&1')
+          & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'opam init mingw "https://github.com/fdopen/opam-repository-mingw.git#opam2" --comp 4.07.0+mingw${ARCH}c --switch 4.07.0_mingw${ARCH}c --auto-setup --yes 2>&1')
           & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'opam update --yes 2>&1')
           & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'cd "$OLDPWD" && opam pin add haxe . --kind=path --no-action --yes 2>&1')
           & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'opam install haxe --deps-only --yes 2>&1')
           & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'opam list')
           & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'ocamlopt -v')
 
-      - name: Fixup opam cache
-        if: steps.cache-opam.outputs.cache-hit == 'true'
-        shell: pwsh
-        run: |
-          Set-PSDebug -Trace 1
-          & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'mv ${OPAMROOT}/4.07.0_mingw${ARCH}c "${OPAMROOT}/4.07.0+mingw${ARCH}c"')
+      # - name: Fixup opam cache
+      #   if: steps.cache-opam.outputs.cache-hit == 'true'
+      #   shell: pwsh
+      #   run: |
+      #     Set-PSDebug -Trace 1
+      #     & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'mv ${OPAMROOT}/4.07.0_mingw${ARCH}c "${OPAMROOT}/4.07.0+mingw${ARCH}c"')
 
       - name: Expose mingw dll files
         shell: pwsh
@@ -138,7 +138,8 @@ jobs:
         shell: pwsh
         run: |
           Set-PSDebug -Trace 1
-          & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'mv "${OPAMROOT}/4.07.0+mingw${ARCH}c" ${OPAMROOT}/4.07.0_mingw${ARCH}c')
+          & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'ls ${OPAMROOT}/')
+          # & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'mv "${OPAMROOT}/4.07.0+mingw${ARCH}c" ${OPAMROOT}/4.07.0_mingw${ARCH}c')
 
   windows-build:
     runs-on: windows-latest
@@ -211,19 +212,19 @@ jobs:
         shell: pwsh
         run: |
           Set-PSDebug -Trace 1
-          & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'opam init mingw "https://github.com/fdopen/opam-repository-mingw.git#opam2" --comp 4.07.0+mingw${ARCH}c --switch 4.07.0+mingw${ARCH}c --auto-setup --yes 2>&1')
+          & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'opam init mingw "https://github.com/fdopen/opam-repository-mingw.git#opam2" --comp 4.07.0+mingw${ARCH}c --switch 4.07.0_mingw${ARCH}c --auto-setup --yes 2>&1')
           & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'opam update --yes 2>&1')
           & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'cd "$OLDPWD" && opam pin add haxe . --kind=path --no-action --yes 2>&1')
           & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'opam install haxe --deps-only --yes 2>&1')
           & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'opam list')
           & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'ocamlopt -v')
 
-      - name: Fixup opam cache
-        if: steps.cache-opam.outputs.cache-hit == 'true'
-        shell: pwsh
-        run: |
-          Set-PSDebug -Trace 1
-          & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'mv ${OPAMROOT}/4.07.0_mingw${ARCH}c "${OPAMROOT}/4.07.0+mingw${ARCH}c"')
+      # - name: Fixup opam cache
+      #   if: steps.cache-opam.outputs.cache-hit == 'true'
+      #   shell: pwsh
+      #   run: |
+      #     Set-PSDebug -Trace 1
+      #     & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'mv ${OPAMROOT}/4.07.0_mingw${ARCH}c "${OPAMROOT}/4.07.0+mingw${ARCH}c"')
 
       - name: Expose mingw dll files
         shell: pwsh
@@ -264,7 +265,8 @@ jobs:
         shell: pwsh
         run: |
           Set-PSDebug -Trace 1
-          & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'mv "${OPAMROOT}/4.07.0+mingw${ARCH}c" ${OPAMROOT}/4.07.0_mingw${ARCH}c')
+          & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'ls ${OPAMROOT}/')
+          # & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'mv "${OPAMROOT}/4.07.0+mingw${ARCH}c" ${OPAMROOT}/4.07.0_mingw${ARCH}c')
 
   linux-build:
     runs-on: ubuntu-20.04
