@@ -21,6 +21,7 @@ jobs:
       ACTIONS_ALLOW_UNSECURE_COMMANDS: true
       PLATFORM: windows64
       OPAMYES: 1
+      OPAMROOT: D:\.opam
       CYG_MIRROR: http://mirrors.kernel.org/sourceware/cygwin/
       ARCH: 64
       MINGW_ARCH: x86_64
@@ -35,7 +36,7 @@ jobs:
         id: cache-opam
         uses: actions/cache@v3.0.11
         with:
-          path: ~/.opam
+          path: D:\.opam
           key: ${{ runner.os }}64-${{ hashFiles('./opam') }}-1
 
       - name: Install Neko from S3
@@ -132,6 +133,7 @@ jobs:
       ACTIONS_ALLOW_UNSECURE_COMMANDS: true
       PLATFORM: windows
       OPAMYES: 1
+      OPAMROOT: D:\.opam
       CYG_MIRROR: http://mirrors.kernel.org/sourceware/cygwin/
       ARCH: 32
       MINGW_ARCH: i686
@@ -147,7 +149,7 @@ jobs:
         id: cache-opam
         uses: actions/cache@v3.0.11
         with:
-          path: ~/.opam
+          path: D:\.opam
           key: ${{ runner.os }}32-${{ hashFiles('./opam') }}-1
 
       - name: Install Neko from S3
