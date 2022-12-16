@@ -488,6 +488,13 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Cache opam
+        id: cache-opam
+        uses: actions/cache@v2
+        with:
+          path: /home/runner/.opam/
+          key: ${{ runner.os }}-${{ hashFiles('./opam') }}
+
       - name: Install Neko from S3
         run: |
           set -ex
@@ -540,6 +547,7 @@ jobs:
 
 
       - name: Install OCaml libraries
+        if: steps.cache-opam.outputs.cache-hit != 'true'
         run: |
           set -ex
           opam init # --disable-sandboxing
