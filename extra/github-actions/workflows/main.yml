@@ -20,6 +20,7 @@ jobs:
       ACTIONS_ALLOW_UNSECURE_COMMANDS: true
       PLATFORM: windows64
       OPAMYES: 1
+      OPAMROOT: D:\.opam
       CYG_MIRROR: http://mirrors.kernel.org/sourceware/cygwin/
       ARCH: 64
       MINGW_ARCH: x86_64
@@ -30,10 +31,33 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Cache opam
+        id: cache-opam
+        uses: actions/cache@v3.0.11
+        with:
+          path: D:\.opam
+          key: ${{ runner.os }}64-${{ hashFiles('./opam') }}-1
+
       @import install-neko-windows.yml
       @import install-nsis.yml
       @import install-ocaml-windows64.yml
+      @import install-ocaml-libs-windows.yml
+
+      - name: Fixup opam cache
+        if: steps.cache-opam.outputs.cache-hit == 'true'
+        shell: pwsh
+        run: |
+          Set-PSDebug -Trace 1
+          & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'mv ${OPAMROOT}/4.07.0_mingw64c "${OPAMROOT}/4.07.0+mingw64c"')
+
       @import build-windows.yml
+
+      - name: Prepare opam cache
+        if: steps.cache-opam.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          Set-PSDebug -Trace 1
+          & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'mv "${OPAMROOT}/4.07.0+mingw64c" ${OPAMROOT}/4.07.0_mingw64c')
 
   windows-build:
     runs-on: windows-latest
@@ -41,6 +65,7 @@ jobs:
       ACTIONS_ALLOW_UNSECURE_COMMANDS: true
       PLATFORM: windows
       OPAMYES: 1
+      OPAMROOT: D:\.opam
       CYG_MIRROR: http://mirrors.kernel.org/sourceware/cygwin/
       ARCH: 32
       MINGW_ARCH: i686
@@ -52,10 +77,33 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Cache opam
+        id: cache-opam
+        uses: actions/cache@v3.0.11
+        with:
+          path: D:\.opam
+          key: ${{ runner.os }}32-${{ hashFiles('./opam') }}-1
+
       @import install-neko-windows.yml
       @import install-nsis.yml
       @import install-ocaml-windows.yml
+      @import install-ocaml-libs-windows.yml
+
+      - name: Fixup opam cache
+        if: steps.cache-opam.outputs.cache-hit == 'true'
+        shell: pwsh
+        run: |
+          Set-PSDebug -Trace 1
+          & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'mv ${OPAMROOT}/4.07.0_mingw32c "${OPAMROOT}/4.07.0+mingw32c"')
+
       @import build-windows.yml
+
+      - name: Prepare opam cache
+        if: steps.cache-opam.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          Set-PSDebug -Trace 1
+          & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'mv "${OPAMROOT}/4.07.0+mingw32c" ${OPAMROOT}/4.07.0_mingw32c')
 
   linux-build:
     runs-on: ubuntu-20.04
