@@ -32,6 +32,11 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Use GNU Tar from msys
+        run: |
+          echo "C:\msys64\usr\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          rm C:\msys64\usr\bin\bash.exe
+
       - name: Cache opam
         id: cache-opam
         uses: actions/cache@v3.0.11
@@ -92,14 +97,6 @@ jobs:
           & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'opam list')
           & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'ocamlopt -v')
 
-
-      - name: Fixup opam cache
-        if: steps.cache-opam.outputs.cache-hit == 'true'
-        shell: pwsh
-        run: |
-          Set-PSDebug -Trace 1
-          & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'mv ${OPAMROOT}/4.07.0_mingw64c "${OPAMROOT}/4.07.0+mingw64c"')
-
       - name: Expose mingw dll files
         shell: pwsh
         run: Write-Host "::add-path::${env:CYG_ROOT}/usr/$($env:MINGW_ARCH)-w64-mingw32/sys-root/mingw/bin"
@@ -135,13 +132,6 @@ jobs:
           path: out
 
 
-      - name: Prepare opam cache
-        if: steps.cache-opam.outputs.cache-hit != 'true'
-        shell: pwsh
-        run: |
-          Set-PSDebug -Trace 1
-          & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'mv "${OPAMROOT}/4.07.0+mingw64c" ${OPAMROOT}/4.07.0_mingw64c')
-
   windows-build:
     runs-on: windows-latest
     env:
@@ -159,6 +149,11 @@ jobs:
       - uses: actions/checkout@main
         with:
           submodules: recursive
+
+      - name: Use GNU Tar from msys
+        run: |
+          echo "C:\msys64\usr\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          rm C:\msys64\usr\bin\bash.exe
 
       - name: Cache opam
         id: cache-opam
@@ -220,14 +215,6 @@ jobs:
           & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'opam list')
           & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'ocamlopt -v')
 
-
-      - name: Fixup opam cache
-        if: steps.cache-opam.outputs.cache-hit == 'true'
-        shell: pwsh
-        run: |
-          Set-PSDebug -Trace 1
-          & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'mv ${OPAMROOT}/4.07.0_mingw32c "${OPAMROOT}/4.07.0+mingw32c"')
-
       - name: Expose mingw dll files
         shell: pwsh
         run: Write-Host "::add-path::${env:CYG_ROOT}/usr/$($env:MINGW_ARCH)-w64-mingw32/sys-root/mingw/bin"
@@ -262,13 +249,6 @@ jobs:
           name: win${{env.ARCH}}Binaries
           path: out
 
-
-      - name: Prepare opam cache
-        if: steps.cache-opam.outputs.cache-hit != 'true'
-        shell: pwsh
-        run: |
-          Set-PSDebug -Trace 1
-          & "$($env:CYG_ROOT)/bin/bash.exe" @('-lc', 'mv "${OPAMROOT}/4.07.0+mingw32c" ${OPAMROOT}/4.07.0_mingw32c')
 
   linux-build:
     runs-on: ubuntu-20.04
