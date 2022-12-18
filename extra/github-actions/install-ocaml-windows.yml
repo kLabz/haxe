@@ -1,4 +1,4 @@
-- name: Install OCaml libraries
+- name: Install OCaml
   shell: pwsh
   run: |
     Set-PSDebug -Trace 1
