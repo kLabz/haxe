@@ -389,7 +389,7 @@ let catch_completion_and_exit ctx callbacks run =
 		if ctx.has_error then 1 else 0
 	with
 		| DisplayProcessingGlobals.Completion str ->
-			callbacks.after_compilation ctx;
+			callbacks.after_compilation ctx false;
 			ServerMessage.completion str;
 			ctx.comm.write_err str;
 			0
@@ -408,14 +408,16 @@ let compile_ctx callbacks ctx =
 	let run ctx =
 		callbacks.before_anything ctx;
 		Setup.setup_common_context ctx;
+		let was_full_typing = ref false in
 		compile_safe ctx (fun () ->
 			let actx = Args.parse_args ctx.com in
 			process_actx ctx actx;
 			callbacks.after_arg_parsing ctx;
+			was_full_typing := ctx.com.display.dms_full_typing;
 			compile ctx actx;
 		);
 		finalize ctx;
-		callbacks.after_compilation ctx;
+		callbacks.after_compilation ctx !was_full_typing;
 	in
 	if ctx.has_error then begin
 		finalize ctx;

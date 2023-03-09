@@ -37,9 +37,19 @@ class context_cache (index : int) = object(self)
 	val module_changes : (path, module_def option) Hashtbl.t = Hashtbl.create 0
 	val module_state_changes : (path, module_cache_state) Hashtbl.t = Hashtbl.create 0
 
-	method prepare () =
+	method prepare (full_typing : bool) =
 		was_initialized <- initialized;
 		self#discard_changes ~record:true ();
+
+		(* TODO replace with delayed invalidation *)
+		(* Ignore removed files if not typing *)
+		(* if not full_typing then begin *)
+		(* 	Hashtbl.iter (fun key f -> Hashtbl.replace removed_files_changes key (Some f)) removed_files; *)
+		(* 	Hashtbl.reset removed_files; *)
+		(* end; *)
+
+		(* Everything is good since we don't save otherwise ~ *)
+		Hashtbl.iter (fun _ m -> m.m_extra.m_cache_state <- MSGood) modules;
 
 	method commit () = self#discard_changes ()
 
@@ -202,11 +212,16 @@ class cache = object(self)
 	(* Note: running restore at the end (well, was it really?) of the request was not *)
 	(* fixing the original issue. This seems to work better but ehhh that's ugly and *)
 	(* I don't have much confidence in it. *)
-	method prepare () =
+	method prepare (log : string -> unit) full_typing =
+		log "Prepare cache for a new request...";
+		if full_typing then log "(full typing)";
 		self#restore ();
+		Hashtbl.iter (fun _ c -> c#prepare full_typing) contexts;
 		record_changes <- true;
 
-	method commit () =
+	(* TODO check why this is called for completion *)
+	method commit (log : string -> unit) =
+		log "Commit cache changes.";
 		self#discard_changes ();
 		List.iter (fun c -> c#commit ()) context_list;
 

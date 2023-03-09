@@ -192,6 +192,7 @@ module DisplayMode = struct
 	type settings = {
 		dms_kind : t;
 		dms_full_typing : bool;
+		dms_minimal_typing : bool;
 		dms_force_macro_typing : bool;
 		dms_error_policy : error_policy;
 		dms_check_core_api : bool;
@@ -204,6 +205,7 @@ module DisplayMode = struct
 	let default_display_settings = {
 		dms_kind = DMDefault;
 		dms_full_typing = false;
+		dms_minimal_typing = true; (* TODO maybe not ON by default *)
 		dms_force_macro_typing = false;
 		dms_error_policy = EPIgnore;
 		dms_check_core_api = false;
@@ -217,6 +219,7 @@ module DisplayMode = struct
 		dms_kind = DMNone;
 		dms_full_typing = true;
 		dms_force_macro_typing = true;
+		dms_minimal_typing = false;
 		dms_error_policy = EPShow;
 		dms_check_core_api = true;
 		dms_inline = true;

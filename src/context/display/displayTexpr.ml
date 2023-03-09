@@ -177,6 +177,8 @@ let check_display_file ctx cs =
 			| None -> raise Not_found
 			| Some m -> check_display_module ctx cfile.c_decls m
 			end
+			(* let m = cc#find_module path in *)
+			(* check_display_module ctx cfile.c_decls m *)
 		with Not_found ->
 			let fkey = DisplayPosition.display_position#get_file_key in
 			(* force parsing again : if the completion point have been changed *)

@@ -312,6 +312,7 @@ let check_module sctx ctx m p =
 			| NoCheckShadowing | NoCheckFileTimeModification when !ServerConfig.do_not_check_modules && !Parser.display_mode <> DMNone -> true
 			| _ -> false
 		in
+		(* TODO only during full typing (already the case?) *and* make sure this is reverted if request fails *)
 		let check_file () =
 			let file = Path.UniqueKey.lazy_path m.m_extra.m_file in
 			if file_time file <> m.m_extra.m_time then begin
@@ -355,13 +356,17 @@ let check_module sctx ctx m p =
 					Some reason
 				| MSUnknown	->
 					(* This should not happen because any MSUnknown module is supposed to have the current m_checked. *)
-					die "" __LOC__
+					die "MSUnknown" __LOC__
 				| MSGood ->
 					(* Otherwise, run the checks *)
 					m.m_extra.m_cache_state <- MSUnknown;
 					check ()
 			in
 			let dirty = match dirty with
+				| Some (Tainted "server/invalidate") ->
+						(* TODO *)
+						ServerMessage.message "Ignore invalidate";
+						None
 				| Some (DependencyDirty _) when has_policy Retype ->
 					let result = Retyper.attempt_retyping ctx m p in
 					begin match result with
@@ -379,6 +384,7 @@ let check_module sctx ctx m p =
 			begin match dirty with
 			| Some reason ->
 				(* Update the state if we're dirty. *)
+				(* TODO make sure this is reverted if request fails *)
 				m.m_extra.m_cache_state <- MSBad reason;
 			| None ->
 				(* We cannot update if we're clean because at this point it might just be an assumption.
@@ -392,6 +398,7 @@ let check_module sctx ctx m p =
 	begin match state with
 	| None ->
 		(* If the entire subgraph is clean, we can set all modules to good state *)
+		(* TODO make sure this is reverted if request fails *)
 		List.iter (fun m -> m.m_extra.m_cache_state <- MSGood) !unknown_state_modules;
 	| Some _ ->
 		(* Otherwise, unknown state module may or may not be dirty. We didn't check everything eagerly, so we have
@@ -399,6 +406,7 @@ let check_module sctx ctx m p =
 		   setting m_checked to a lower value and assuming Good state again. *)
 		List.iter (fun m -> match m.m_extra.m_cache_state with
 			| MSUnknown ->
+				(* TODO make sure this is reverted if request fails *)
 				m.m_extra.m_checked <- start_mark - 1;
 				m.m_extra.m_cache_state <- MSGood;
 			| MSGood | MSBad _ ->
@@ -471,7 +479,7 @@ let type_module sctx (ctx:Typecore.typer) mpath p =
 		None
 
 let before_anything sctx ctx =
-	sctx.cs#prepare ();
+	(* sctx.cs#prepare ServerMessage.message ctx.com.display.dms_full_typing; *)
 	ensure_macro_setup sctx
 
 let after_arg_parsing sctx ctx =
@@ -481,6 +489,8 @@ let after_arg_parsing sctx ctx =
 	ServerMessage.defines com "";
 	ServerMessage.signature com "" sign;
 	ServerMessage.display_position com "" (DisplayPosition.display_position#get);
+	sctx.cs#prepare ServerMessage.message ctx.com.display.dms_full_typing;
+
 	try
 		if (Hashtbl.find sctx.class_paths sign) <> com.class_path then begin
 			ServerMessage.class_paths_changed com "";
@@ -492,13 +502,13 @@ let after_arg_parsing sctx ctx =
 		Hashtbl.add sctx.class_paths sign com.class_path;
 		()
 
-let after_compilation sctx ctx =
+let after_compilation sctx ctx full_typing =
 	if has_error ctx then
 		(* TODO FIXME *)
 		(* sctx.cs#restore () *)
 		()
 	else
-		maybe_cache_context sctx ctx.com
+		maybe_cache_context sctx ctx.com full_typing
 
 let mk_length_prefixed_communication allow_nonblock chin chout =
 	let sin = Unix.descr_of_in_channel chin in
@@ -635,6 +645,7 @@ let rec process sctx comm args =
 	reset sctx;
 	let api = {
 		on_context_create = (fun () ->
+			(* TODO not sure how safe that is with all the restoration happening... *)
 			sctx.compilation_step <- sctx.compilation_step + 1;
 			sctx.compilation_step;
 		);

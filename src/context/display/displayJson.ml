@@ -119,6 +119,13 @@ let handler =
 			end
 		);
 		"display/completion", (fun hctx ->
+			let file = hctx.jsonrpc#get_string_param "file" in
+			let fkey = hctx.com.file_keys#get file in
+			let cs = hctx.display#get_cs in
+			ServerMessage.message "Invalidate for completion";
+			cs#taint_modules fkey "server/invalidate";
+			cs#remove_files fkey;
+
 			hctx.display#set_display_file (hctx.jsonrpc#get_bool_param "wasAutoTriggered") true;
 			hctx.display#enable_display DMDefault;
 		);

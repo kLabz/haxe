@@ -45,7 +45,7 @@ and compilation_context = {
 type compilation_callbacks = {
 	before_anything : compilation_context -> unit;
 	after_arg_parsing : compilation_context -> unit;
-	after_compilation : compilation_context -> unit;
+	after_compilation : compilation_context -> bool -> unit;
 }
 
 type server_accept = unit -> (bool * (bool -> string option) * (string -> unit) * (unit -> unit))

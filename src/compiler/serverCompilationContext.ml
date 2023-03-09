@@ -57,13 +57,15 @@ let reset sctx =
 	Hashtbl.clear Timer.htimers;
 	Helper.start_time := get_time()
 
-let maybe_cache_context sctx com =
-	if not com.display.dms_full_typing then
+let maybe_cache_context sctx com full_typing =
+	(* Somehow this was saying complotion requests were full typing at this point *)
+	(* if not com.display.dms_full_typing then *)
+	if not full_typing then
 		(* TODO FIXME *)
 		(* sctx.cs#restore () *)
 		()
 	else begin
-		sctx.cs#commit ();
+		sctx.cs#commit ServerMessage.message;
 		CommonCache.cache_context sctx.cs com;
 		ServerMessage.cached_modules com "" (List.length com.modules);
 	end
