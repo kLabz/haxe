@@ -169,6 +169,9 @@ class Main {
 	}
 
 	static macro function getStd() {
+		var std = Compiler.getConfiguration().stdPath;
+		Context.fatalError(std.join(" -- "), (macro 0).pos);
+
 		var std = Compiler.getConfiguration().stdPath.shift();
 		return macro $v{std};
 	}
