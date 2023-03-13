@@ -170,6 +170,6 @@ class Main {
 
 	static macro function getStd() {
 		var std = Compiler.getConfiguration().stdPath;
-		return macro $v{std.length == 1 ? std[0] : std[1]};
+		return macro $v{std.shift()};
 	}
 }
