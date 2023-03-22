@@ -52,7 +52,7 @@ class EventLoop {
 	final wakeup:Async;
 	var promisedEventsCount = 0;
 	var pending:Array<()->Void> = [];
-	var looping = false;
+	var started:Bool = false;
 
 	var isMainThread:Bool;
 	static var CREATED : Bool;
@@ -139,17 +139,10 @@ class EventLoop {
 		}
 	}
 
-	/**
-		Executes all pending events.
-
-		The returned time stamps can be used with `Sys.time()` for calculations.
-
-		Depending on a target platform this method may be non-reentrant. It must
-		not be called from event callbacks.
-	**/
 	public function progress():NextEventTime {
-		//TODO: throw if loop is already running
-		if((handle:Loop).run(NOWAIT)) {
+		if (started) throw "Event loop already started";
+
+		if (handle.run(NOWAIT)) {
 			return AnyTime(null);
 		} else {
 			return Never;
@@ -169,7 +162,8 @@ class EventLoop {
 		not be called from event callbacks.
 	**/
 	public function wait(?timeout:Float):Bool {
-		//TODO: throw if loop is already running
+		if (started) throw "Event loop already started";
+
 		if(timeout != null) {
 			var timer = LuvTimer.init(handle).resolve();
 			timer.start(() -> {
@@ -191,7 +185,8 @@ class EventLoop {
 		not be called from event callbacks.
 	**/
 	public function loop():Void {
-		//TODO: throw if loop is already running
+		if (started) throw "Event loop already started";
+		started = true;
 		consumePending();
 		handle.run(DEFAULT);
 	}
@@ -200,8 +195,8 @@ class EventLoop {
 		var p = pending;
 		pending = [];
 		for(fn in p) fn();
-		if (isMainThread && MainLoop.hasEvents()) {
-			runPromised(() -> @:privateAccess MainLoop.tick());
+		if (started && isMainThread && MainLoop.hasEvents()) {
+			run(() -> @:privateAccess MainLoop.tick());
 		}
 	}
 }
