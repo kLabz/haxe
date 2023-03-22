@@ -71,10 +71,18 @@ class EventLoop {
 	public function repeat(event:()->Void, intervalMs:Int):EventHandler {
 		var e = new RegularEvent(event);
 		mutex.acquire();
-		pending.push(() -> {
+		// var now = handle.now().toInt();
+		// trace(intervalMs, handle.now());
+		// pending.push(() -> {
+			var delay = intervalMs;
+			var intervalMs = intervalMs < 1 ? 1 : intervalMs;
+			// var delay = handle.now().toInt() - (now + intervalMs);
+			// trace(intervalMs, delay);
+			// if (delay < 0) delay = 0;
 			e.timer = LuvTimer.init(handle).resolve();
-			e.timer.start(e.run, intervalMs, intervalMs < 1 ? 1 : intervalMs).resolve();
-		});
+			e.timer.start(e.run, delay, intervalMs).resolve();
+			// trace(e.timer.dueIn);
+		// });
 		mutex.release();
 		wakeup.send();
 		return e;
@@ -104,7 +112,8 @@ class EventLoop {
 	public function promise():Void {
 		mutex.acquire();
 		++promisedEventsCount;
-		pending.push(refUnref);
+		// pending.push(refUnref);
+		oneTimeEvents[oneTimeEventsIdx++] = refUnref;
 		mutex.release();
 		wakeup.send();
 	}
@@ -125,9 +134,10 @@ class EventLoop {
 	**/
 	public function runPromised(event:()->Void):Void {
 		mutex.acquire();
-		oneTimeEvents[oneTimeEventsIdx++] = event;
 		--promisedEventsCount;
-		pending.push(refUnref);
+		oneTimeEvents[oneTimeEventsIdx++] = event;
+		oneTimeEvents[oneTimeEventsIdx++] = refUnref;
+		// pending.push(refUnref);
 		// pending.push(event);
 		mutex.release();
 		wakeup.send();
