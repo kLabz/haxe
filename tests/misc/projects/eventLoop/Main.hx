@@ -38,10 +38,13 @@ class Main {
 		#end
 
 		#if sys
+		trace(".");
 		Sys.sleep(0.3);
+		trace(".");
 		#end
 
 		haxe.MainLoop.addThread(function() {
+			trace("add ABCDE thread");
 			var event : haxe.MainLoop.MainEvent = null;
 			var count = 0;
 			event = haxe.MainLoop.add(function() {

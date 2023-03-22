@@ -204,6 +204,8 @@ class EventLoop {
 	}
 
 	function consumePending(?_:Async):Void {
+		trace("consumePending", started);
+
 		mutex.acquire();
 		var p = pending;
 		pending = [];
@@ -217,8 +219,12 @@ class EventLoop {
 		mutex.release();
 		for(fn in p) fn();
 
-		if (started && isMainThread) {
-			run(() -> @:privateAccess MainLoop.tick());
+		if (isMainThread) {
+			var next = @:privateAccess MainLoop.tick();
+			if( haxe.MainLoop.hasEvents() ) {
+				trace(next);
+				wakeup.send();
+			}
 		}
 	}
 }
