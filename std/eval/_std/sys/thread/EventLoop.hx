@@ -217,7 +217,7 @@ class EventLoop {
 		mutex.release();
 		for(fn in p) fn();
 
-		if (started && isMainThread && MainLoop.hasEvents()) {
+		if (started && isMainThread) {
 			run(() -> @:privateAccess MainLoop.tick());
 		}
 	}
