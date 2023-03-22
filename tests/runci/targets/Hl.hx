@@ -52,7 +52,7 @@ class Hl {
 			"-DWITH_OPENAL=OFF",
 			"-DWITH_SDL=OFF",
 			"-DWITH_SQLITE=ON",
-			"-DWITH_SSL=OFF",
+			"-DWITH_SSL=ON",
 			"-DWITH_UI=OFF",
 			"-DWITH_UV=OFF",
 			"-DWITH_VIDEO=OFF",
