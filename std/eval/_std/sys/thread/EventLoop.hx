@@ -47,7 +47,7 @@ class EventLoop {
 	final handle:Loop;
 
 	final mutex = new Mutex();
-	final oneTimeEvents = new Array<Null<()->Void>>();
+	var oneTimeEvents = new Array<Null<()->Void>>();
 	var oneTimeEventsIdx = 0;
 	final wakeup:Async;
 	var promisedEventsCount = 0;
@@ -114,7 +114,8 @@ class EventLoop {
 	**/
 	public function run(event:()->Void):Void {
 		mutex.acquire();
-		pending.push(event);
+		oneTimeEvents[oneTimeEventsIdx++] = event;
+		// pending.push(event);
 		mutex.release();
 		wakeup.send();
 	}
@@ -124,9 +125,10 @@ class EventLoop {
 	**/
 	public function runPromised(event:()->Void):Void {
 		mutex.acquire();
+		oneTimeEvents[oneTimeEventsIdx++] = event;
 		--promisedEventsCount;
 		pending.push(refUnref);
-		pending.push(event);
+		// pending.push(event);
 		mutex.release();
 		wakeup.send();
 	}
@@ -192,9 +194,19 @@ class EventLoop {
 	}
 
 	function consumePending(?_:Async):Void {
+		mutex.acquire();
 		var p = pending;
 		pending = [];
+		mutex.release();
 		for(fn in p) fn();
+
+		mutex.acquire();
+		var p = oneTimeEvents;
+		oneTimeEvents = [];
+		oneTimeEventsIdx = 0;
+		mutex.release();
+		for(fn in p) fn();
+
 		if (started && isMainThread && MainLoop.hasEvents()) {
 			run(() -> @:privateAccess MainLoop.tick());
 		}
