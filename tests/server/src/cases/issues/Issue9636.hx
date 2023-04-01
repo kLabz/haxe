@@ -10,7 +10,6 @@ class Issue9636 extends TestCase {
 		runHaxe(args);
 		assertSuccess();
 		runHaxe(['--cmd', 'node test.js']);
-		trace(lastResult.stdout);
-		Assert.isTrue(lastResult.stdout.contains('Foo'));
+		Assert.isTrue(lastResult.stderr.contains('Exception from Foo'));
 	}
 }
