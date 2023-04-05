@@ -98,8 +98,10 @@ class ExampleJSGenerator {
 	}
 
 	function checkFieldName(c:ClassType, f:ClassField) {
+		#if macro
 		if (forbidden.exists(f.name))
 			Context.error("The field " + f.name + " is not allowed in JS", c.pos);
+		#end
 	}
 
 	function genClassField(c:ClassType, p:String, f:ClassField) {
