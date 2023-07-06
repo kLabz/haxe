@@ -352,7 +352,11 @@ void c_rec_objsize(value v, size_t depth)
 
   DBG(printf("COL: w %08lx %i\n", v, col));
 
-  Hd_val(v) = Coloredhd_hd(hd, Col_blue);
+  /* Hd_val(v) = Coloredhd_hd(hd, Col_blue); */
+  atomic_store_explicit(
+	Hp_atomic_val(v),
+	Coloredhd_hd(hd, Col_blue),
+	memory_order_release);
 
   if (Tag_val(v) < No_scan_tag)
    {
@@ -378,7 +382,11 @@ void restore_colors(value v)
 
   col = readcolor();
   DBG(printf("COL: r %08lx %i\n", v, col));
-  Hd_val(v) = Coloredhd_hd(Hd_val(v), col);
+  /* Hd_val(v) = Coloredhd_hd(Hd_val(v), col); */
+  atomic_store_explicit(
+	Hp_atomic_val(v),
+	Coloredhd_hd(Hd_val(v), col),
+	memory_order_release);
 
   if (Tag_val(v) < No_scan_tag)
    {
@@ -417,7 +425,11 @@ int c_objsize(value v, value scan, value reach, size_t* headers, size_t* data, s
 	head = Field(head,1);
 	if( col == Col_blue ) continue;
 	writecolor(col);
-	Hd_val(v) = Coloredhd_hd(hd, Col_blue);
+	/* Hd_val(v) = Coloredhd_hd(hd, Col_blue); */
+	atomic_store_explicit(
+		Hp_atomic_val(v),
+		Coloredhd_hd(hd, Col_blue),
+		memory_order_release);
  }
 
  acc_data = 0;
@@ -444,7 +456,11 @@ int c_objsize(value v, value scan, value reach, size_t* headers, size_t* data, s
 	head = Field(head,1);
 	if( Colornum_hd(Hd_val(v)) != Col_blue ) continue;
 	col = readcolor();
-	Hd_val(v) = Coloredhd_hd(Hd_val(v), col);
+	/* Hd_val(v) = Coloredhd_hd(Hd_val(v), col); */
+	atomic_store_explicit(
+		Hp_atomic_val(v),
+		Coloredhd_hd(Hd_val(v), col),
+		memory_order_release);
  }
 
   while( COND_BLOCK(reach) ) {
