@@ -1154,7 +1154,10 @@ let find_file ctx f =
 	Std.finally timer (find_file ctx) f *)
 
 let mem_size v =
-	Objsize.size_with_headers (Objsize.objsize v [] [])
+	(* Objsize.size_with_headers (Objsize.objsize v [] []) *)
+	(* Obj.reachable_words v *)
+	ignore(v);
+	0
 
 let hash f =
 	let h = ref 0 in
