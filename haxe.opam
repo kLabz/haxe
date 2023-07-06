@@ -27,6 +27,7 @@ depends: [
   "xml-light"
   "extlib" {>= "1.7.8"}
   "sha"
+  "camlp-streams"
   "conf-libpcre2-8"
   "conf-zlib"
   "conf-neko"
