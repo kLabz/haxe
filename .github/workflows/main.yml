@@ -305,9 +305,7 @@ jobs:
         if: steps.cache-opam.outputs.cache-hit != 'true'
         run: |
           set -ex
-          opam init # --disable-sandboxing
-          opam update
-          opam switch create ${{ matrix.ocaml }}
+          opam init --compiler=${{ matrix.ocaml }}
           opam pin add haxe . --no-action
           opam install haxe --deps-only --assume-depexts
           opam list
@@ -650,9 +648,7 @@ jobs:
         if: steps.cache-opam.outputs.cache-hit != 'true'
         run: |
           set -ex
-          opam init # --disable-sandboxing
-          opam update
-          opam switch create 4.08.1
+          opam init --compiler=4.08.1
           eval $(opam env)
           opam env
           opam pin add ctypes 0.17.1 --yes
