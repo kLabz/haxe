@@ -278,6 +278,7 @@ let do_type ctx tctx actx =
 	com.stage <- CInitMacrosStart;
 	List.iter (MacroContext.call_init_macro tctx) (List.rev actx.config_macros);
 	com.stage <- CInitMacrosDone;
+	Typer.init tctx;
 	check_defines ctx.com;
 	CommonCache.lock_signature com "after_init_macros";
 	com.callbacks#run com.callbacks#get_after_init_macros;

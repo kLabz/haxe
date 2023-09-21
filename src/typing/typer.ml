@@ -2083,74 +2083,75 @@ and type_expr ?(mode=MGet) ctx (e,p) (with_type:WithType.t) =
 (* ---------------------------------------------------------------------- *)
 (* TYPER INITIALIZATION *)
 
-let create com =
-	let ctx = {
-		com = com;
-		t = com.basic;
-		g = {
-			core_api = None;
-			macros = None;
-			type_patches = Hashtbl.create 0;
-			global_metadata = [];
-			module_check_policies = [];
-			delayed = [];
-			debug_delayed = [];
-			doinline = com.display.dms_inline && not (Common.defined com Define.NoInline);
-			retain_meta = Common.defined com Define.RetainUntypedMeta;
-			std = null_module;
-			global_using = [];
-			complete = false;
-			type_hints = [];
-			load_only_cached_modules = false;
-			functional_interface_lut = new pmap_lookup;
-			do_inherit = MagicTypes.on_inherit;
-			do_macro = MacroContext.type_macro;
-			do_load_macro = MacroContext.load_macro';
-			do_load_module = TypeloadModule.load_module;
-			do_load_type_def = Typeload.load_type_def;
-			do_build_instance = InstanceBuilder.build_instance;
-			do_format_string = format_string;
-			do_load_core_class = Typeload.load_core_class;
-		};
-		m = {
-			curmod = null_module;
-			module_imports = [];
-			module_using = [];
-			module_globals = PMap.empty;
-			wildcard_packages = [];
-			import_statements = [];
-		};
-		is_display_file = false;
-		bypass_accessor = 0;
-		meta = [];
-		with_type_stack = [];
-		call_argument_stack = [];
-		pass = PBuildModule;
-		macro_depth = 0;
-		untyped = false;
-		curfun = FunStatic;
-		in_function = false;
-		in_loop = false;
-		in_display = false;
-		allow_inline = true;
-		allow_transform = true;
-		get_build_infos = (fun() -> None);
-		ret = mk_mono();
-		locals = PMap.empty;
-		type_params = [];
-		curclass = null_class;
-		curfield = null_field;
-		tthis = mk_mono();
-		opened = [];
-		vthis = None;
-		in_call_args = false;
-		in_overload_call_args = false;
-		delayed_display = None;
-		monomorphs = {
-			perfunction = [];
-		};
-		memory_marker = Typecore.memory_marker;
-	} in
+let create com = {
+	com = com;
+	t = com.basic;
+	g = {
+		core_api = None;
+		macros = None;
+		type_patches = Hashtbl.create 0;
+		global_metadata = [];
+		module_check_policies = [];
+		delayed = [];
+		debug_delayed = [];
+		doinline = com.display.dms_inline && not (Common.defined com Define.NoInline);
+		retain_meta = Common.defined com Define.RetainUntypedMeta;
+		std = null_module;
+		global_using = [];
+		complete = false;
+		type_hints = [];
+		load_only_cached_modules = false;
+		functional_interface_lut = new pmap_lookup;
+		do_inherit = MagicTypes.on_inherit;
+		do_macro = MacroContext.type_macro;
+		do_load_macro = MacroContext.load_macro';
+		do_load_module = TypeloadModule.load_module;
+		do_load_type_def = Typeload.load_type_def;
+		do_build_instance = InstanceBuilder.build_instance;
+		do_format_string = format_string;
+		do_load_core_class = Typeload.load_core_class;
+	};
+	m = {
+		curmod = null_module;
+		module_imports = [];
+		module_using = [];
+		module_globals = PMap.empty;
+		wildcard_packages = [];
+		import_statements = [];
+	};
+	is_display_file = false;
+	bypass_accessor = 0;
+	meta = [];
+	with_type_stack = [];
+	call_argument_stack = [];
+	pass = PBuildModule;
+	macro_depth = 0;
+	untyped = false;
+	curfun = FunStatic;
+	in_function = false;
+	in_loop = false;
+	in_display = false;
+	allow_inline = true;
+	allow_transform = true;
+	get_build_infos = (fun() -> None);
+	ret = mk_mono();
+	locals = PMap.empty;
+	type_params = [];
+	curclass = null_class;
+	curfield = null_field;
+	tthis = mk_mono();
+	opened = [];
+	vthis = None;
+	in_call_args = false;
+	in_overload_call_args = false;
+	delayed_display = None;
+	monomorphs = {
+		perfunction = [];
+	};
+	memory_marker = Typecore.memory_marker;
+}
+
+let init ctx =
 	ctx.g.std <- (try
 		TypeloadModule.load_module ctx ([],"StdTypes") null_pos
 	with
@@ -2217,8 +2218,7 @@ let create com =
 		| _ -> die "" __LOC__);
 	| _ -> die "" __LOC__);
 	ignore(TypeloadModule.load_module ctx (["haxe"],"Exception") null_pos);
-	ctx.g.complete <- true;
-	ctx
+	ctx.g.complete <- true
 
 ;;
 unify_min_ref := unify_min;
@@ -2228,4 +2228,5 @@ type_call_target_ref := type_call_target;
 type_access_ref := type_access;
 type_block_ref := type_block;
 create_context_ref := create;
+init_context_ref := init;
 type_expr_ref := (fun ?(mode=MGet) ctx e with_type -> type_expr ~mode ctx e with_type);

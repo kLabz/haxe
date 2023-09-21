@@ -824,6 +824,7 @@ let load_core_class ctx c =
 			if com2.display.dms_check_core_api then com2.display <- {com2.display with dms_check_core_api = false};
 			CommonCache.lock_signature com2 "load_core_class";
 			let ctx2 = !create_context_ref com2 in
+			!init_context_ref ctx2;
 			ctx.g.core_api <- Some ctx2;
 			ctx2
 		| Some c ->

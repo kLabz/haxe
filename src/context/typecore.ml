@@ -218,6 +218,7 @@ let cast_or_unify_raise_ref : (typer -> ?uctx:unification_context option -> Type
 let type_generic_function_ref : (typer -> field_access -> (unit -> texpr) field_call_candidate -> WithType.t -> pos -> texpr) ref = ref (fun _ _ _ _ _ -> assert false)
 
 let create_context_ref : (Common.context -> typer) ref = ref (fun _ -> assert false)
+let init_context_ref : (typer -> unit) ref = ref (fun _ -> assert false)
 
 let pass_name = function
 	| PBuildModule -> "build-module"
