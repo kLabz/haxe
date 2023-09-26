@@ -1026,8 +1026,10 @@ let resolve_init_macro com e =
 		raise_typing_error "Invalid macro call" p
 
 let call_init_macro ctx e =
-	let (path,meth,args,p) = resolve_init_macro ctx.com e in
-	let mctx, (margs,_,mclass,mfield), call = load_macro ctx false path meth p in
+	let mctx = get_macro_context ctx in
+	let (path,meth,args,p) = resolve_init_macro mctx.com e in
+	let mctx, (margs,_,mclass,mfield), call = load_macro mctx false path meth p in
+	flush_macro_context (Interp.get_ctx()) mctx;
 	ignore(call_macro mctx args margs call p);
 
 module MacroLight = struct
