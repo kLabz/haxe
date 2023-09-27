@@ -275,11 +275,14 @@ let do_type ctx tctx actx =
 	let t = Timer.timer ["typing"] in
 	let cs = com.cs in
 	CommonCache.maybe_add_context_sign cs com "before_init_macros";
+	let init_sign = Define.get_signature com.defines in
 	com.stage <- CInitMacrosStart;
 	List.iter (MacroContext.call_init_macro tctx) (List.rev actx.config_macros);
 	com.stage <- CInitMacrosDone;
 	check_defines ctx.com;
+	let sign = Define.get_signature com.defines in
 	CommonCache.lock_signature com "after_init_macros";
+	let tctx = if init_sign = sign then tctx else Typer.create com in
 	com.callbacks#run com.callbacks#get_after_init_macros;
 	run_or_diagnose ctx (fun () ->
 		if com.display.dms_kind <> DMNone then DisplayTexpr.check_display_file tctx cs;
