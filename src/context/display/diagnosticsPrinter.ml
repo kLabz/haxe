@@ -140,9 +140,11 @@ let json_of_diagnostics com dctx =
 					]
 				| FieldAccess ->
 					"FieldAccess",jobject []
+				| StaticFieldAccess ->
+					"StaticFieldAccess",jobject []
 				| FinalFields cfl ->
 					"FinalFields",jobject [
-						"fields",jarray (List.map (fun cf -> generate_class_field jctx (scope cf) cf) cfl)
+						"fields",jarray (List.map (fun cf -> generate_class_field jctx (scope cf) cf) (List.rev cfl))
 					]
 			in
 			let current_fields = ref [] in

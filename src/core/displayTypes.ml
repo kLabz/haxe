@@ -317,6 +317,7 @@ type missing_field_cause =
 	| ImplementedInterface of tclass * tparams
 	| PropertyAccessor of tclass_field * bool (* true = getter *)
 	| FieldAccess
+	| StaticFieldAccess
 	| FinalFields of tclass_field list
 
 and missing_fields_diagnostics = {

@@ -298,8 +298,8 @@ typedef JsonClassKind<T> = {
 	var args:T;
 }
 
-typedef JsonClass = {
-	var kind:JsonClassKind<Dynamic>;
+typedef JsonClass<T> = {
+	var kind:JsonClassKind<T>;
 	var isInterface:Bool;
 	var isExtern:Bool;
 	var isFinal:Bool;
@@ -343,7 +343,7 @@ typedef JsonAbstractCast = {
 
 typedef JsonAbstract = {
 	var type:JsonType<Dynamic>;
-	var impl:Null<JsonClass>;
+	var impl:Null<JsonClass<Dynamic>>;
 	var binops:Array<JsonAbstractBinop>;
 	var unops:Array<JsonAbstractUnop>;
 	var from:Array<JsonAbstractCast>;
@@ -354,7 +354,7 @@ typedef JsonAbstract = {
 
 /* Module type */
 enum abstract JsonModuleTypeKind<T>(String) {
-	var Class:JsonModuleTypeKind<JsonClass> = "class";
+	var Class:JsonModuleTypeKind<JsonClass<Dynamic>> = "class";
 	var Enum:JsonModuleTypeKind<JsonEnum> = "enum";
 	var Typedef:JsonModuleTypeKind<JsonTypedef> = "typedef";
 	var Abstract:JsonModuleTypeKind<JsonAbstract> = "abstract";

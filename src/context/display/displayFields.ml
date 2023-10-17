@@ -332,7 +332,7 @@ let collect ctx e_ast e dk with_type p =
 	with Exit | Not_found ->
 		items
 
-let handle_missing_field_raise ctx tthis i mode with_type pfield =
+let handle_missing_field_raise ctx tthis i mode with_type cause pfield =
 	let tret = match with_type with
 		| WithType.WithType(t,_) -> t
 		| WithType.Value _ -> mk_mono()
@@ -394,7 +394,7 @@ let handle_missing_field_raise ctx tthis i mode with_type pfield =
 		mf_pos = pfield;
 		mf_on = mt;
 		mf_fields = [(cf,t,CompletionItem.CompletionType.from_type (Display.get_import_status ctx) t)];
-		mf_cause = FieldAccess;
+		mf_cause = cause;
 	} in
 	let display = ctx.com.display_information in
 	display.module_diagnostics <- MissingFields diag :: display.module_diagnostics
@@ -404,13 +404,13 @@ let handle_missing_ident ctx i mode with_type p =
 	| FunStatic ->
 		let e_self = Texpr.Builder.make_static_this ctx.curclass p in
 		begin try
-			handle_missing_field_raise ctx e_self.etype i mode with_type p
+			handle_missing_field_raise ctx e_self.etype i mode with_type StaticFieldAccess p
 		with Exit ->
 			()
 		end
 	| _ ->
 		begin try
-			handle_missing_field_raise ctx ctx.tthis i mode with_type p
+			handle_missing_field_raise ctx ctx.tthis i mode with_type FieldAccess p
 		with Exit ->
 			()
 		end
