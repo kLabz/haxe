@@ -178,7 +178,7 @@ let is_persistent cf =
 let create_static_prototype ctx mt =
 	let path = (t_infos mt).mt_path in
 	let key = path_hash path in
-	let meta = Texpr.build_metadata ctx.basic mt in
+	let meta = if ctx.is_macro then None else Texpr.build_metadata (ctx.curapi.MacroApi.get_com()).Common.basic mt in
 	let o = match mt with
 	| TClassDecl c ->
 		let pparent = match c.cl_super with
