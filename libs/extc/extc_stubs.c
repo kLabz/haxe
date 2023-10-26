@@ -38,7 +38,7 @@
 #	include <time.h>
 #	include <sys/time.h>
 #	include <sys/times.h>
-#	include <sys/stat.h>
+#	include <asm/stat.h>
 #	include <caml/memory.h>
 #endif
 #ifdef __APPLE__
@@ -570,6 +570,6 @@ CAMLprim value sys_filetime( value file ) {
 	struct stat sbuf;
 	if( stat(String_val(file),&sbuf) < 0 )
 		return caml_copy_double(0.);
-	return caml_copy_double( sbuf.st_mtime );
+	return caml_copy_double( sbuf.st_mtime_nsec );
 #	endif
 }
