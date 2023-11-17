@@ -3084,11 +3084,21 @@ and gen_assign_op ctx acc e1 f =
 and build_capture_vars ctx f =
 	let ignored_vars = ref PMap.empty in
 	let used_vars = ref PMap.empty in
+	let depth = ref 0 in
+
 	(* get all captured vars in scope, ignore vars that are declared *)
 	let decl_var v =
-		if has_var_flag v VCaptured then ignored_vars := PMap.add v.v_id () !ignored_vars
+		if has_var_flag v VCaptured then
+		ignored_vars := PMap.add v.v_id !depth !ignored_vars
 	in
 	let use_var v =
+		(* vars used in nested try/catch need to act as captured vars #9174 *)
+		let decl_depth = try PMap.find v.v_id !ignored_vars with Not_found -> !depth in
+		if decl_depth < !depth then begin
+			add_var_flag v VCaptured;
+			ignored_vars := PMap.remove v.v_id !ignored_vars;
+		end;
+
 		if has_var_flag v VCaptured then used_vars := PMap.add v.v_id v !used_vars
 	in
 	let rec loop e =
@@ -3096,15 +3106,18 @@ and build_capture_vars ctx f =
 		| TLocal v ->
 			use_var v;
 		| TVar (v,_) ->
-			decl_var v
-		| TTry (_,catches) ->
-			List.iter (fun (v,_) -> decl_var v) catches
+			decl_var v;
 		| TFunction f ->
 			List.iter (fun (v,_) -> decl_var v) f.tf_args;
-		| _ ->
-			()
-		);
-		Type.iter loop e
+		| _ -> ());
+
+		(match e.eexpr with
+		| TTry (_,catches) ->
+			incr depth;
+			List.iter (fun (v,_) -> decl_var v) catches;
+			Type.iter loop e;
+			decr depth
+		| _ -> Type.iter loop e)
 	in
 	List.iter (fun (v,_) -> decl_var v) f.tf_args;
 	loop f.tf_expr;
