@@ -29,6 +29,7 @@ type eq_kind =
 	| EqRightDynamic
 	| EqBothDynamic
 	| EqDoNotFollowNull (* like EqStrict, but does not follow Null<T> *)
+	| EqStrictStrict (* TODO *)
 
 type unification_context = {
 	allow_transitive_cast   : bool;
@@ -491,6 +492,7 @@ let rec_stack_default stack value fcheck frun def =
 let rec type_eq uctx a b =
 	let param = uctx.equality_kind in
 	let can_follow t = match param with
+		| EqStrictStrict -> false
 		| EqCoreType -> false
 		| EqDoNotFollowNull -> not (is_explicit_null t)
 		| _ -> true
@@ -522,9 +524,9 @@ let rec type_eq uctx a b =
 		()
 	| TAbstract ({a_path=[],"Null"},[t1]),TAbstract ({a_path=[],"Null"},[t2]) ->
 		type_eq uctx t1 t2
-	| TAbstract ({a_path=[],"Null"},[t]),_ when param <> EqDoNotFollowNull ->
+	| TAbstract ({a_path=[],"Null"},[t]),_ when param <> EqDoNotFollowNull && param <> EqStrictStrict ->
 		type_eq uctx t b
-	| _,TAbstract ({a_path=[],"Null"},[t]) when param <> EqDoNotFollowNull ->
+	| _,TAbstract ({a_path=[],"Null"},[t]) when param <> EqDoNotFollowNull && param <> EqStrictStrict ->
 		type_eq uctx a t
 	| TType (t1,tl1), TType (t2,tl2) when (t1 == t2 || (param = EqCoreType && t1.t_path = t2.t_path)) && List.length tl1 = List.length tl2 ->
 		type_eq_params uctx a b tl1 tl2
@@ -574,7 +576,7 @@ let rec type_eq uctx a b =
 			PMap.iter (fun n f1 ->
 				try
 					let f2 = PMap.find n a2.a_fields in
-					if f1.cf_kind <> f2.cf_kind && (param = EqStrict || param = EqCoreType || param = EqDoNotFollowNull || not (unify_kind ~strict:uctx.strict_field_kind f1.cf_kind f2.cf_kind)) then error [invalid_kind n f1.cf_kind f2.cf_kind];
+					if f1.cf_kind <> f2.cf_kind && (param = EqStrict || param = EqCoreType || param = EqDoNotFollowNull || param = EqStrictStrict || not (unify_kind ~strict:uctx.strict_field_kind f1.cf_kind f2.cf_kind)) then error [invalid_kind n f1.cf_kind f2.cf_kind];
 					let a = f1.cf_type and b = f2.cf_type in
 					(try type_eq uctx a b with Unify_error l -> error (invalid_field n :: l));
 					if (has_class_field_flag f1 CfPublic) != (has_class_field_flag f2 CfPublic) then error [invalid_visibility n];
