@@ -21,7 +21,17 @@ let check_auxiliary_output com actx =
 			Genjson.generate com.types file
 	end
 
-let export_hxb com config cc platform zip m =
+let create_writer com config string_pool =
+	let anon_identification = new tanon_identification in
+	let warn w s p = com.Common.warning w com.warning_options s p in
+	let writer = HxbWriter.create config string_pool warn anon_identification in
+	writer,(fun () ->
+		let out = IO.output_string () in
+		HxbWriter.export writer out;
+		IO.close_out out
+	)
+
+let export_hxb com config string_pool cc platform zip m =
 	let open HxbData in
 	match m.m_extra.m_kind with
 		| MCode | MMacro | MFake | MExtern -> begin
@@ -40,13 +50,10 @@ let export_hxb com config cc platform zip m =
 				let data = IO.close_out out in
 				zip#add_entry data path;
 			with Not_found ->
-				let anon_identification = new tanon_identification in
-				let warn w s p = com.Common.warning w com.warning_options s p in
-				let writer = HxbWriter.create config None warn anon_identification in
+				let writer,close = create_writer com config string_pool in
 				HxbWriter.write_module writer m;
-				let out = IO.output_string () in
-				HxbWriter.export writer out;
-				zip#add_entry (IO.close_out out) path;
+				let bytes = close () in
+				zip#add_entry bytes path;
 		end
 	| _ ->
 		()
@@ -54,6 +61,13 @@ let export_hxb com config cc platform zip m =
 let check_hxb_output ctx config =
 	let open HxbWriterConfig in
 	let com = ctx.com in
+	let write_string_pool config zip pool =
+		let writer,close = create_writer com config (Some pool) in
+		let a = StringPool.finalize writer.cp in
+		HxbWriter.HxbWriter.write_string_pool writer STR a;
+		let bytes = close () in
+		zip#add_entry bytes ("StringPool.hxb");
+	in
 	let match_path_list l sl_path =
 		List.exists (fun sl -> Ast.match_path true sl_path sl) l
 	in
@@ -63,6 +77,7 @@ let check_hxb_output ctx config =
 		let t = Timer.timer ["generate";"hxb"] in
 		Path.mkdir_from_path path;
 		let zip = new Zip_output.zip_output path 6 in
+		let string_pool = StringPool.create () in
 		let export com config =
 			let cc = CommonCache.get_cache com in
 			let target = Common.platform_name_macro com in
@@ -70,14 +85,14 @@ let check_hxb_output ctx config =
 				let t = Timer.timer ["generate";"hxb";s_type_path m.m_path] in
 				let sl_path = fst m.m_path @ [snd m.m_path] in
 				if not (match_path_list config.exclude sl_path) || match_path_list config.include' sl_path then
-					Std.finally t (export_hxb com config cc target zip) m
+					Std.finally t (export_hxb com config (Some string_pool) cc target zip) m
 			) com.modules;
 		in
 		Std.finally (fun () ->
 			zip#close;
 			t()
 		) (fun () ->
-			if  config.target_config.generate then
+			if config.target_config.generate then
 				export com config.target_config;
 			begin match com.get_macros() with
 				| Some mcom when config.macro_config.generate ->
@@ -85,6 +100,8 @@ let check_hxb_output ctx config =
 				| _ ->
 					()
 			end;
+			(* TODO: macro vs non macro *)
+			write_string_pool config.target_config zip string_pool;
 		) ()
 	in
 	try
