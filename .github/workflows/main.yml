@@ -255,7 +255,7 @@ jobs:
 
 
   linux-build:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     env:
       PLATFORM: linux64
       OPAMYES: 1
@@ -296,8 +296,6 @@ jobs:
       - name: Install dependencies
         run: |
           set -ex
-          sudo add-apt-repository ppa:avsm/ppa -y # provides OPAM 2
-          sudo add-apt-repository ppa:haxe/ocaml -y # provides newer version of mbedtls
           sudo apt-get update -qqy
           sudo apt-get install -qqy ocaml-nox camlp5 opam libpcre2-dev zlib1g-dev libgtk2.0-dev libmbedtls-dev ninja-build libstring-shellquote-perl libipc-system-simple-perl
 
@@ -305,6 +303,7 @@ jobs:
         if: steps.cache-opam.outputs.cache-hit != 'true'
         run: |
           set -ex
+          opam --version
           opam init # --disable-sandboxing
           opam update
           opam switch create ${{ matrix.ocaml }}
@@ -361,7 +360,7 @@ jobs:
 
   linux-test:
     needs: linux-build
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     env:
       PLATFORM: linux64
       TEST: ${{matrix.target}}
@@ -446,7 +445,7 @@ jobs:
 
   test-docgen:
     needs: linux-build
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     env:
       PLATFORM: linux64
       HXCPP_COMPILE_CACHE: ~/hxcache
@@ -523,7 +522,7 @@ jobs:
         working-directory: ${{github.workspace}}/tests/docgen
 
   linux-arm64:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     permissions:
       packages: write
     env:
@@ -948,7 +947,7 @@ jobs:
   deploy:
     if: success() && github.repository_owner == 'HaxeFoundation' && github.event_name != 'pull_request'
     needs: [linux-test, linux-arm64, mac-test, windows-test, windows64-test]
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       # this is only needed for to get `COMMIT_DATE`...
       # maybe https://github.community/t/expose-commit-timestamp-in-the-github-context-data/16460/3
@@ -1024,7 +1023,7 @@ jobs:
   deploy_apidoc:
     if: success() && github.repository_owner == 'HaxeFoundation' && github.event_name != 'pull_request'
     needs: [linux-test, linux-arm64, mac-test, windows-test, windows64-test]
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Install dependencies
         run: |
