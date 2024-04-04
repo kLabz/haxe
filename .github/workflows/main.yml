@@ -201,7 +201,8 @@ jobs:
         run: echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
 
       - name: Build xmldoc
-        if: matrix.ocaml == '4.08.1'
+        if: false
+        # if: matrix.ocaml == '4.08.1'
         run: |
           set -ex
           make -s xmldoc
@@ -220,7 +221,8 @@ jobs:
 
       - name: Upload xmldoc artifact
         uses: actions/upload-artifact@v4
-        if: matrix.ocaml == '4.08.1'
+        if: false
+        # if: matrix.ocaml == '4.08.1'
         with:
           name: xmldoc
           path: extra/doc
@@ -311,6 +313,7 @@ jobs:
         working-directory: ${{github.workspace}}/tests
 
   test-docgen:
+    if: false
     needs: linux-build
     runs-on: ubuntu-20.04
     env:
@@ -833,7 +836,8 @@ jobs:
 
 
   deploy_apidoc:
-    if: success() && github.repository_owner == 'HaxeFoundation' && github.event_name != 'pull_request'
+    if: false
+    # if: success() && github.repository_owner == 'HaxeFoundation' && github.event_name != 'pull_request'
     needs: [linux-test, linux-arm64, mac-test, windows64-test]
     runs-on: ubuntu-20.04
     steps:
