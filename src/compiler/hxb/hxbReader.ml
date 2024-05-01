@@ -177,10 +177,16 @@ class hxb_reader
 	val mutable field_type_parameter_offset = 0
 	val empty_anon = mk_anon (ref Closed)
 
+	method is_sig_dep (sig_deps : (int,module_dep) PMap.t option) (path : path) = match sig_deps with
+		| None ->
+			true
+		| Some deps ->
+			PMap.fold (fun md found -> found || md.md_path = path) deps false
+
 	method is_module_ignored path =
 		sig_only
 		&& current_module.m_path <> path
-		&& not (api#is_sig_dep current_module.m_extra.m_sig_deps path)
+		&& not (self#is_sig_dep current_module.m_extra.m_sig_deps path)
 
 	method resolve_type pack mname tname =
 		try
@@ -2031,9 +2037,9 @@ class hxb_reader
 	method read_chunks (new_api : hxb_reader_api) (chunks : cached_chunks) =
 		fst (self#read_chunks_until new_api chunks EOM false)
 
-	method read_chunks_until (new_api : hxb_reader_api) (chunks : cached_chunks) end_chunk _sig_only =
+	method read_chunks_until (new_api : hxb_reader_api) (chunks : cached_chunks) end_chunk skip_expr =
 		api <- new_api;
-		sig_only <- _sig_only;
+		sig_only <- skip_expr;
 		let rec loop = function
 			| (kind,data) :: chunks ->
 				ch <- BytesWithPosition.create data;

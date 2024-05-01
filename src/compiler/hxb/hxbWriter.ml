@@ -1747,8 +1747,6 @@ module HxbWriter = struct
 	and start_texpr writer (p: pos) =
 		let restore = start_temporary_chunk writer 512 in
 		let fctx = create_field_writer_context (PosWriter.create writer.chunk p) in
-		let old = writer.in_expr in
-		writer.in_expr <- true;
 		fctx,(fun () ->
 			restore(fun new_chunk ->
 				let restore = start_temporary_chunk writer 512 in
@@ -1771,7 +1769,6 @@ module HxbWriter = struct
 					remove_var_flag v VHxb;
 					write_var writer fctx v;
 				) fctx.vars;
-				writer.in_expr <- old;
 				restore(fun newer_chunk -> newer_chunk,new_chunk)
 			)
 		)
@@ -1800,15 +1797,21 @@ module HxbWriter = struct
 			| Some e when not write_expr_immediately ->
 				Chunk.write_u8 writer.chunk 2;
 				let fctx,close = start_texpr writer e.epos in
+				let old = writer.in_expr in
+				writer.in_expr <- true;
 				write_texpr writer fctx e;
 				Chunk.write_option writer.chunk cf.cf_expr_unoptimized (write_texpr writer fctx);
+				writer.in_expr <- old;
 				let expr_chunk = close() in
 				Some expr_chunk
 			| Some e ->
 				Chunk.write_u8 writer.chunk 1;
 				let fctx,close = start_texpr writer e.epos in
+				let old = writer.in_expr in
+				writer.in_expr <- true;
 				write_texpr writer fctx e;
 				Chunk.write_option writer.chunk cf.cf_expr_unoptimized (write_texpr writer fctx);
+				writer.in_expr <- old;
 				let expr_pre_chunk,expr_chunk = close() in
 				Chunk.export_data expr_pre_chunk writer.chunk;
 				Chunk.export_data expr_chunk writer.chunk;
@@ -2123,7 +2126,7 @@ module HxbWriter = struct
 			Chunk.write_dynarray writer.chunk items (write_typedef writer);
 		end;
 
-		writer.in_expr <- true;
+		(* writer.in_expr <- true; *)
 
 		let items = HashedIdentityPool.finalize writer.class_fields in
 		if DynArray.length items > 0 then begin
@@ -2257,12 +2260,10 @@ module HxbWriter = struct
 			end
 		end;
 
-		let i = ref 0 in
-		let sig_deps = ref PMap.empty in
+		let sig_deps = ref (PMap.map (fun m -> m) m.m_extra.m_manual_deps) in
 		List.iter (fun mdep ->
 			let dep = {md_sign = mdep.m_extra.m_sign; md_path = mdep.m_path; md_kind = mdep.m_extra.m_kind} in
-			sig_deps := PMap.add !i dep !sig_deps;
-			incr i
+			sig_deps := PMap.add mdep.m_id dep !sig_deps;
 		) writer.sig_deps;
 		m.m_extra.m_sig_deps <- Some !sig_deps;
 
