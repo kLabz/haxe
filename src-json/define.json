@@ -167,6 +167,11 @@
 		"platforms": ["eval"]
 	},
 	{
+		"name": "FailFast",
+		"define": "fail-fast",
+		"doc": "Abort compilation when first error occurs."
+	},
+	{
 		"name": "FilterTimes",
 		"define": "filter-times",
 		"doc": "Record per-filter execution times upon --times."
@@ -787,7 +792,7 @@
 	{
 		"name": "MessageReporting",
 		"define": "message.reporting",
-		"doc": "Select message reporting mode for compiler output. (default: classic)",
+		"doc": "Select message reporting mode for compiler output. (default: pretty)",
 		"params": ["mode: classic | pretty | indent"]
 	},
 	{

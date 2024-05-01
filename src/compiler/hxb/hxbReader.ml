@@ -148,12 +148,14 @@ let dump_stats name stats =
 class hxb_reader
 	(mpath : path)
 	(stats : hxb_reader_stats)
+	(string_pool : string array option)
 = object(self)
 	val mutable api = Obj.magic ""
 	val mutable current_module = null_module
 
 	val mutable ch = BytesWithPosition.create (Bytes.create 0)
-	val mutable string_pool = Array.make 0 ""
+	val mutable has_string_pool = (string_pool <> None)
+	val mutable string_pool = (match string_pool with None -> Array.make 0 "" | Some pool -> pool)
 	val mutable doc_pool = Array.make 0 ""
 
 	val mutable classes = Array.make 0 null_class
@@ -179,6 +181,12 @@ class hxb_reader
 		with Not_found ->
 			dump_backtrace();
 			error (Printf.sprintf "[HXB] [%s] Cannot resolve type %s" (s_type_path current_module.m_path) (s_type_path ((pack @ [mname]),tname)))
+
+	method get_string_pool =
+		if has_string_pool then
+			Some (string_pool)
+		else
+			None
 
 	(* Primitives *)
 
@@ -1515,6 +1523,7 @@ class hxb_reader
 		end;
 		a.a_from <- self#read_list (fun () -> self#read_type_instance);
 		a.a_to <- self#read_list (fun () -> self#read_type_instance);
+		a.a_extern <- self#read_bool;
 		a.a_enum <- self#read_bool;
 
 	method read_abstract_fields (a : tabstract) =
@@ -1923,9 +1932,11 @@ class hxb_reader
 		match kind with
 		| STR ->
 			string_pool <- self#read_string_pool;
+			has_string_pool <- true;
 		| DOC ->
 			doc_pool <- self#read_string_pool;
 		| MDF ->
+			assert(has_string_pool);
 			current_module <- self#read_mdf;
 		| MTF ->
 			current_module.m_types <- self#read_mtf;
@@ -1973,11 +1984,29 @@ class hxb_reader
 		| EOM ->
 			incr stats.modules_fully_restored;
 
+	method private get_backtrace () = Printexc.get_raw_backtrace ()
+	method private get_callstack () = Printexc.get_callstack 200
+
+	method private failwith chunk msg backtrace =
+		let msg =
+			(Printf.sprintf "Compiler failure while reading hxb chunk %s of %s: %s\n" (string_of_chunk_kind chunk) (s_type_path mpath) (msg))
+			^ "Please submit an issue at https://github.com/HaxeFoundation/haxe/issues/new\n"
+			^ "Attach the following information:"
+		in
+		let backtrace = Printexc.raw_backtrace_to_string backtrace in
+		let s = Printf.sprintf "%s\nHaxe: %s\n%s" msg s_version_full backtrace in
+		failwith s
+
 	method private read_chunk_data kind =
 		let path = String.concat "_" (ExtLib.String.nsplit (s_type_path mpath) ".") in
 		let id = ["hxb";"read";string_of_chunk_kind kind;path] in
 		let close = Timer.timer id in
-		self#read_chunk_data' kind;
+		try
+			self#read_chunk_data' kind
+		with Invalid_argument msg -> begin
+			close();
+			self#failwith kind msg (self#get_backtrace ())
+		end;
 		close()
 
 	method read_chunks (new_api : hxb_reader_api) (chunks : cached_chunks) =

@@ -291,7 +291,7 @@ let check_module sctx com m_path m_extra p =
 				end
 		in
 		let has_policy policy = List.mem policy m_extra.m_check_policy || match policy with
-			| NoCheckShadowing | NoCheckFileTimeModification when !ServerConfig.do_not_check_modules && !Parser.display_mode <> DMNone -> true
+			| NoFileSystemCheck when !ServerConfig.do_not_check_modules && !Parser.display_mode <> DMNone -> true
 			| _ -> false
 		in
 		let check_file () =
@@ -337,9 +337,9 @@ let check_module sctx com m_path m_extra p =
 		in
 		let check () =
 			try
-				if not (has_policy NoCheckShadowing) then check_module_path();
-				if not (has_policy NoCheckFileTimeModification) || Path.file_extension (Path.UniqueKey.lazy_path m_extra.m_file) <> "hx" then check_file();
-				if not (has_policy NoCheckDependencies) then check_dependencies();
+				check_module_path();
+				if not (has_policy NoFileSystemCheck) || Path.file_extension (Path.UniqueKey.lazy_path m_extra.m_file) <> "hx" then check_file();
+				check_dependencies();
 				None
 			with
 			| Dirty reason ->
@@ -429,7 +429,7 @@ class hxb_reader_api_server
 		| GoodModule m ->
 			m
 		| BinaryModule mc ->
-			let reader = new HxbReader.hxb_reader path com.hxb_reader_stats in
+			let reader = new HxbReader.hxb_reader path com.hxb_reader_stats (Some cc#get_string_pool_arr) in
 			let f_next chunks until =
 				let t_hxb = Timer.timer ["server";"module cache";"hxb read"] in
 				let r = reader#read_chunks_until (self :> HxbReaderApi.hxb_reader_api) chunks until in
@@ -579,7 +579,7 @@ and type_module sctx com delay mpath p =
 			   checking dependencies. This means that the actual decoding never has any reason to fail. *)
 			begin match check_module sctx mpath mc.mc_extra p with
 				| None ->
-					let reader = new HxbReader.hxb_reader mpath com.hxb_reader_stats in
+					let reader = new HxbReader.hxb_reader mpath com.hxb_reader_stats (Some cc#get_string_pool_arr) in
 					let api = match com.hxb_reader_api with
 						| Some api ->
 							api
