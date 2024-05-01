@@ -109,6 +109,12 @@ class hxb_reader_api_com
 	(com : Common.context)
 	(cc : CompilationCache.context_cache)
 = object(self)
+	method is_sig_dep (sig_deps : (int,module_dep) PMap.t option) (path : path) = match sig_deps with
+		| None ->
+			true
+		| Some deps ->
+			PMap.fold (fun md found -> found || md.md_path = path) deps false
+
 	method make_module (path : path) (file : string) =
 		let mc = cc#get_hxb_module path in
 		{
@@ -140,7 +146,7 @@ class hxb_reader_api_com
 		with Not_found ->
 			let mc = cc#get_hxb_module m_path in
 			let reader = new HxbReader.hxb_reader mc.mc_path com.hxb_reader_stats (Some cc#get_string_pool_arr) (Common.defined com Define.HxbTimes) in
-			fst (reader#read_chunks_until (self :> HxbReaderApi.hxb_reader_api) mc.mc_chunks (if headers_only then MTF else EOM))
+			fst (reader#read_chunks_until (self :> HxbReaderApi.hxb_reader_api) mc.mc_chunks (if headers_only then MTF else EOM) headers_only)
 
 	method basic_types =
 		com.basic

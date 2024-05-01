@@ -171,6 +171,7 @@ let module_extra file sign time kind added policy =
 		m_time = time;
 		m_processed = 0;
 		m_deps = PMap.empty;
+		m_sig_deps = None;
 		m_kind = kind;
 		m_cache_bound_objects = DynArray.create ();
 		m_features = Hashtbl.create 0;
@@ -231,6 +232,8 @@ let null_typedef =
 	let t = mk_typedef null_module ([],"") null_pos null_pos (TDynamic None) in
 	t.t_private <- true;
 	t
+
+let unavailable_typedef = null_typedef
 
 let null_tanon = { a_fields = PMap.empty; a_status = ref Closed }
 

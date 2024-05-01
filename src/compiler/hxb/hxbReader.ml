@@ -153,6 +153,7 @@ class hxb_reader
 = object(self)
 	val mutable api = Obj.magic ""
 	val mutable current_module = null_module
+	val mutable sig_only = false
 
 	val mutable ch = BytesWithPosition.create (Bytes.create 0)
 	val mutable has_string_pool = (string_pool <> None)
@@ -176,9 +177,17 @@ class hxb_reader
 	val mutable field_type_parameter_offset = 0
 	val empty_anon = mk_anon (ref Closed)
 
+	method is_module_ignored path =
+		sig_only
+		&& current_module.m_path <> path
+		&& not (api#is_sig_dep current_module.m_extra.m_sig_deps path)
+
 	method resolve_type pack mname tname =
 		try
-			api#resolve_type pack mname tname
+			if self#is_module_ignored (pack,mname) then
+				TTypeDecl unavailable_typedef
+			else
+				api#resolve_type pack mname tname
 		with Not_found ->
 			dump_backtrace();
 			error (Printf.sprintf "[HXB] [%s] Cannot resolve type %s" (s_type_path current_module.m_path) (s_type_path ((pack @ [mname]),tname)))
@@ -1790,6 +1799,8 @@ class hxb_reader
 				match self#resolve_type pack mname tname with
 				| TClassDecl c ->
 					c
+				| TTypeDecl td when td == unavailable_typedef ->
+					null_class
 				| _ ->
 					error ("Unexpected type where class was expected: " ^ (s_type_path (pack,tname)))
 		))
@@ -1801,6 +1812,8 @@ class hxb_reader
 			match self#resolve_type pack mname tname with
 			| TAbstractDecl a ->
 				a
+			| TTypeDecl td when td == unavailable_typedef ->
+				null_abstract
 			| _ ->
 				error ("Unexpected type where abstract was expected: " ^ (s_type_path (pack,tname)))
 		))
@@ -1812,6 +1825,8 @@ class hxb_reader
 			match self#resolve_type pack mname tname with
 			| TEnumDecl en ->
 				en
+			| TTypeDecl td when td == unavailable_typedef ->
+				null_enum
 			| _ ->
 				error ("Unexpected type where enum was expected: " ^ (s_type_path (pack,tname)))
 		))
@@ -1821,6 +1836,8 @@ class hxb_reader
 		typedefs <- (Array.init l (fun i ->
 			let (pack,mname,tname) = self#read_full_path in
 			match self#resolve_type pack mname tname with
+			| TTypeDecl td when td == unavailable_typedef ->
+				null_typedef
 			| TTypeDecl tpd ->
 				tpd
 			| _ ->
@@ -1831,7 +1848,8 @@ class hxb_reader
 		let length = read_uleb128 ch in
 		for _ = 0 to length - 1 do
 			let path = self#read_path in
-			ignore(api#resolve_module path)
+			if not (self#is_module_ignored path) then
+				ignore(api#resolve_module path)
 		done
 
 	method read_mtf =
@@ -2011,10 +2029,11 @@ class hxb_reader
 		close()
 
 	method read_chunks (new_api : hxb_reader_api) (chunks : cached_chunks) =
-		fst (self#read_chunks_until new_api chunks EOM)
+		fst (self#read_chunks_until new_api chunks EOM false)
 
-	method read_chunks_until (new_api : hxb_reader_api) (chunks : cached_chunks) end_chunk =
+	method read_chunks_until (new_api : hxb_reader_api) (chunks : cached_chunks) end_chunk _sig_only =
 		api <- new_api;
+		sig_only <- _sig_only;
 		let rec loop = function
 			| (kind,data) :: chunks ->
 				ch <- BytesWithPosition.create data;

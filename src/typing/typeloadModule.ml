@@ -742,6 +742,12 @@ class hxb_reader_api_typeload
 	(load_module : context -> typer_globals -> path -> pos -> module_def)
 	(p : pos)
 = object(self)
+	method is_sig_dep (sig_deps : (int,module_dep) PMap.t option) (path : path) = match sig_deps with
+		| None ->
+			true
+		| Some deps ->
+			PMap.fold (fun md found -> found || md.md_path = path) deps false
+
 	method make_module (path : path) (file : string) =
 		let m = ModuleLevel.make_module com g path file p in
 		m.m_extra.m_processed <- 1;

@@ -2,6 +2,7 @@ open Globals
 open Type
 
 class virtual hxb_reader_api = object(self)
+	method virtual is_sig_dep : (int,TType.module_dep) PMap.t option -> path -> bool
 	method virtual make_module : path -> string -> module_def
 	method virtual add_module : module_def -> unit
 	method virtual resolve_type : string list -> string -> string -> module_type
@@ -14,6 +15,7 @@ end
 class hxb_reader_api_null = object(self)
 	inherit hxb_reader_api
 
+	method is_sig_dep _ = assert false
 	method make_module _ = assert false
 	method add_module _ = assert false
 	method resolve_type _ _ _ = assert false
