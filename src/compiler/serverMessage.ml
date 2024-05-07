@@ -58,7 +58,7 @@ let config = {
 }
 
 let sign_string com =
-	let sign = Define.get_signature com.defines in
+	let sign = Define.get_signature com.defines com.is_macro_context in
 	let cs = com.cs in
 	let	sign_id = (cs#get_context sign)#get_index in
 	Printf.sprintf "%2i,%3s: " sign_id (short_platform_name com.platform)
@@ -128,7 +128,7 @@ let defines com tabs =
 	end
 
 let signature com tabs sign =
-	if config.print_signature then print_endline ("Using signature " ^ Digest.to_hex sign)
+	if config.print_signature then print_endline ("Using signature " ^ Printer.s_module_sign sign)
 
 let display_position com tabs p =
 	if config.print_display_position then print_endline ("Display position: " ^ (Printer.s_pos p))

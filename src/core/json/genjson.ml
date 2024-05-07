@@ -707,7 +707,7 @@ let generate_module modules find_module m =
 		"path",generate_module_path m.m_path;
 		"types",jlist (fun mt -> generate_type_path m.m_path (t_infos mt).mt_path (t_infos mt).mt_meta) m.m_types;
 		"file",jstring (Path.UniqueKey.lazy_path m.m_extra.m_file);
-		"sign",jstring (Digest.to_hex m.m_extra.m_sign);
+		"sign",jstring (Printer.s_module_sign m.m_extra.m_sign);
 		"cacheState",jstring (match m.m_extra.m_cache_state with
 			| MSGood -> "Good"
 			| MSBad reason -> Printer.s_module_skip_reason reason
@@ -715,12 +715,12 @@ let generate_module modules find_module m =
 		"dependencies",jarray (PMap.fold (fun mdep acc ->
 			(jobject [
 				"path",jstring (s_type_path mdep.md_path);
-				"sign",jstring (Digest.to_hex (find_module mdep.md_path).m_extra.m_sign);
+				"sign",jstring (Printer.s_module_sign (find_module mdep.md_path).m_extra.m_sign);
 			]) :: acc
 		) m.m_extra.m_deps []);
 		"dependents",jarray (List.map (fun (path, sign) -> (jobject [
 			"path",jstring (s_type_path path);
-			"sign",jstring (Digest.to_hex sign);
+			"sign",jstring (Printer.s_module_sign sign);
 		])) (Hashtbl.fold (fun _ (m':HxbData.module_cache) acc ->
 			if PMap.mem m.m_id m'.mc_extra.m_deps then (m'.mc_path, m'.mc_extra.m_sign) :: acc
 			else acc

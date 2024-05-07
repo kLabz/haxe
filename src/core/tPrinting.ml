@@ -612,6 +612,10 @@ module Printer = struct
 		| MExtern -> "MExtern"
 		| MImport -> "MImport"
 
+	let s_module_sign sign =
+		let hex = Digest.to_hex (fst sign) in
+		if snd sign then "[macro] " ^ hex else hex
+
 	let s_module_tainting_reason = function
 		| CheckDisplayFile -> "check_display_file"
 		| ServerInvalidate -> "server/invalidate"
@@ -636,7 +640,7 @@ module Printer = struct
 	let s_module_def_extra tabs me =
 		s_record_fields tabs [
 			"m_file",Path.UniqueKey.lazy_path me.m_file;
-			"m_sign",(Digest.to_hex me.m_sign);
+			"m_sign",(s_module_sign me.m_sign);
 			"m_time",string_of_float me.m_time;
 			"m_cache_state",s_module_cache_state me.m_cache_state;
 			"m_added",string_of_int me.m_added;

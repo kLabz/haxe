@@ -72,18 +72,18 @@ let handle_native_lib com lib =
 
 let get_cache com = match com.Common.cache with
 	| None ->
-		let sign = Define.get_signature com.defines in
+		let sign = Define.get_signature com.defines com.is_macro_context in
 		com.cs#get_context sign
 	| Some cache ->
 		cache
 
 let get_cache_sign com = match com.Common.cache with
-	| None -> Define.get_signature com.defines
+	| None -> Define.get_signature com.defines com.is_macro_context
 	| Some cache -> cache#get_sign
 
 let rec cache_context cs com =
 	let cc = get_cache com in
-	let sign = Define.get_signature com.defines in
+	let sign = Define.get_signature com.defines com.is_macro_context in
 	let anon_identification = new Tanon_identification.tanon_identification in
 	let config = match com.hxb_writer_config with
 		| None ->
@@ -107,7 +107,7 @@ let rec cache_context cs com =
 	end
 
 let maybe_add_context_sign cs com desc =
-	let sign = Define.get_signature com.defines in
+	let sign = Define.get_signature com.defines com.is_macro_context in
 	ignore(cs#add_info sign desc com.platform com.class_paths com.defines)
 
 let lock_signature com name =

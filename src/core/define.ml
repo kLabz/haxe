@@ -3,7 +3,7 @@ include DefineList
 
 type define = {
 	mutable values : (string,string) PMap.t;
-	mutable defines_signature : string option;
+	mutable defines_signature : TType.module_sign option;
 }
 
 type user_define = {
@@ -141,7 +141,7 @@ let raw_undefine ctx k =
 let define ctx k =
 	raw_define_value ctx (get_define_key k) "1"
 
-let get_signature def =
+let get_signature def is_macro =
 	match def.defines_signature with
 	| Some s -> s
 	| None ->
@@ -159,8 +159,8 @@ let get_signature def =
 		) def.values [] in
 		let str = String.concat "@" (List.sort compare defines) in
 		let s = Digest.string str in
-		def.defines_signature <- Some s;
-		s
+		def.defines_signature <- Some (s, is_macro);
+		(s, is_macro)
 
 let deprecation_lut =
 	let h = Hashtbl.create 0 in

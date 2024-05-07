@@ -317,7 +317,7 @@ let process_global_display_mode com tctx =
 		let open CompilationCache in
 		let cs = com.cs in
 		let symbols =
-			let l = cs#get_context_files ((Define.get_signature com.defines) :: (match com.get_macros() with None -> [] | Some com -> [Define.get_signature com.defines])) in
+			let l = cs#get_context_files ((Define.get_signature com.defines com.is_macro_context) :: (match com.get_macros() with None -> [] | Some com -> [Define.get_signature com.defines com.is_macro_context])) in
 			List.fold_left (fun acc (file_key,cfile) ->
 				let file = cfile.c_file_path.file in
 				if (filter <> None || DisplayPosition.display_position#is_in_file (com.file_keys#get file)) then

@@ -323,7 +323,7 @@ let handler =
 		);
 		"server/readClassPaths", (fun hctx ->
 			hctx.com.callbacks#add_after_init_macros (fun () ->
-				let cc = hctx.display#get_cs#get_context (Define.get_signature hctx.com.defines) in
+				let cc = hctx.display#get_cs#get_context (Define.get_signature hctx.com.defines hctx.com.is_macro_context) in
 				cc#set_initialized true;
 				DisplayToplevel.read_class_paths hctx.com ["init"];
 				let files = hctx.display#get_cs#get_files in
@@ -339,51 +339,59 @@ let handler =
 		);
 		"server/modules", (fun hctx ->
 			let sign = Digest.from_hex (hctx.jsonrpc#get_string_param "signature") in
-			let cc = hctx.display#get_cs#get_context sign in
-			let open HxbData in
-			let l = Hashtbl.fold (fun _ m acc ->
-				if m.mc_extra.m_kind <> MFake then jstring (s_type_path m.mc_path) :: acc else acc
-			) cc#get_hxb [] in
-			hctx.send_result (jarray l)
+			match hctx.display#get_cs#find_context sign with
+			| Some (cc, sign) ->
+				let open HxbData in
+				let l = Hashtbl.fold (fun _ m acc ->
+					if m.mc_extra.m_kind <> MFake then jstring (s_type_path m.mc_path) :: acc else acc
+				) cc#get_hxb [] in
+				hctx.send_result (jarray l)
+			| None ->
+				hctx.send_error [jstring ("No context found for sign " ^ sign)]
 		);
 		"server/module", (fun hctx ->
 			let sign = Digest.from_hex (hctx.jsonrpc#get_string_param "signature") in
 			let path = Path.parse_path (hctx.jsonrpc#get_string_param "path") in
-			let cs = hctx.display#get_cs in
-			let cc = cs#get_context sign in
-			let m = try
-				find_module ~headers_only:true hctx.com cc path
-			with Not_found ->
-				hctx.send_error [jstring "No such module"]
-			in
-			hctx.send_result (generate_module (cc#get_hxb) (find_module ~headers_only:true hctx.com cc) m)
+			match hctx.display#get_cs#find_context sign with
+			| Some (cc, sign) ->
+				let m = try
+					find_module ~headers_only:true hctx.com cc path
+				with Not_found ->
+					hctx.send_error [jstring "No such module"]
+				in
+				hctx.send_result (generate_module (cc#get_hxb) (find_module ~headers_only:true hctx.com cc) m)
+			| None ->
+				hctx.send_error [jstring ("No context found for sign " ^ sign)]
 		);
 		"server/type", (fun hctx ->
 			let sign = Digest.from_hex (hctx.jsonrpc#get_string_param "signature") in
 			let path = Path.parse_path (hctx.jsonrpc#get_string_param "modulePath") in
 			let typeName = hctx.jsonrpc#get_string_param "typeName" in
-			let cc = hctx.display#get_cs#get_context sign in
-			let m = try
-				find_module ~headers_only:true hctx.com cc path
-			with Not_found ->
-				hctx.send_error [jstring "No such module"]
-			in
-			let rec loop mtl = match mtl with
-				| [] ->
-					hctx.send_error [jstring "No such type"]
-				| mt :: mtl ->
-					begin match mt with
-					| TClassDecl c -> c.cl_restore()
-					| _ -> ()
-					end;
-					let infos = t_infos mt in
-					if snd infos.mt_path = typeName then begin
-						let ctx = Genjson.create_context GMMinimum in
-						hctx.send_result (Genjson.generate_module_type ctx mt)
-					end else
-						loop mtl
-			in
-			loop m.m_types
+			match hctx.display#get_cs#find_context sign with
+			| Some (cc, sign) ->
+				let m = try
+					find_module ~headers_only:true hctx.com cc path
+				with Not_found ->
+					hctx.send_error [jstring "No such module"]
+				in
+				let rec loop mtl = match mtl with
+					| [] ->
+						hctx.send_error [jstring "No such type"]
+					| mt :: mtl ->
+						begin match mt with
+						| TClassDecl c -> c.cl_restore()
+						| _ -> ()
+						end;
+						let infos = t_infos mt in
+						if snd infos.mt_path = typeName then begin
+							let ctx = Genjson.create_context GMMinimum in
+							hctx.send_result (Genjson.generate_module_type ctx mt)
+						end else
+							loop mtl
+				in
+				loop m.m_types
+			| None ->
+				hctx.send_error [jstring ("No context found for sign " ^ sign)]
 		);
 		"server/typeContexts", (fun hctx ->
 			let path = Path.parse_path (hctx.jsonrpc#get_string_param "modulePath") in
@@ -422,18 +430,21 @@ let handler =
 		);
 		"server/files", (fun hctx ->
 			let sign = Digest.from_hex (hctx.jsonrpc#get_string_param "signature") in
-			let cc = hctx.display#get_cs#get_context sign in
-			let files = Hashtbl.fold (fun file cfile acc -> (file,cfile) :: acc) cc#get_files [] in
-			let files = List.sort (fun (file1,_) (file2,_) -> compare file1 file2) files in
-			let files = List.map (fun (fkey,cfile) ->
-				jobject [
-					"file",jstring cfile.c_file_path.file;
-					"time",jfloat cfile.c_time;
-					"pack",jstring (String.concat "." cfile.c_package);
-					"moduleName",jopt jstring cfile.c_module_name;
-				]
-			) files in
-			hctx.send_result (jarray files)
+			match hctx.display#get_cs#find_context sign with
+			| Some (cc, sign) ->
+				let files = Hashtbl.fold (fun file cfile acc -> (file,cfile) :: acc) cc#get_files [] in
+				let files = List.sort (fun (file1,_) (file2,_) -> compare file1 file2) files in
+				let files = List.map (fun (fkey,cfile) ->
+					jobject [
+						"file",jstring cfile.c_file_path.file;
+						"time",jfloat cfile.c_time;
+						"pack",jstring (String.concat "." cfile.c_package);
+						"moduleName",jopt jstring cfile.c_module_name;
+					]
+				) files in
+				hctx.send_result (jarray files)
+			| None ->
+				hctx.send_error [jstring ("No context found for sign " ^ sign)]
 		);
 		"server/invalidate", (fun hctx ->
 			let file = hctx.jsonrpc#get_string_param "file" in
@@ -478,14 +489,20 @@ let handler =
 		);
 		"server/memory/context",(fun hctx ->
 			let sign = Digest.from_hex (hctx.jsonrpc#get_string_param "signature") in
-			let j = Memory.get_memory_json hctx.display#get_cs (MContext sign) in
-			hctx.send_result j
+			try
+				let j = Memory.get_memory_json hctx.display#get_cs (MContext sign) in
+				hctx.send_result j
+			with Not_found ->
+				hctx.send_error [jstring ("No context found for sign " ^ sign)]
 		);
 		"server/memory/module",(fun hctx ->
 			let sign = Digest.from_hex (hctx.jsonrpc#get_string_param "signature") in
 			let path = Path.parse_path (hctx.jsonrpc#get_string_param "path") in
-			let j = Memory.get_memory_json hctx.display#get_cs (MModule(sign,path)) in
-			hctx.send_result j
+			try
+				let j = Memory.get_memory_json hctx.display#get_cs (MModule(sign,path)) in
+				hctx.send_result j
+			with Not_found ->
+				hctx.send_error [jstring ("No context found for sign " ^ sign)]
 		);
 		(* TODO: wait till gama complains about the naming, then change it to something else *)
 		"typer/compiledTypes", (fun hctx ->

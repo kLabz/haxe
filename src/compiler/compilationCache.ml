@@ -31,7 +31,7 @@ let get_module_name_of_cfile file cfile = match cfile.c_module_name with
 	| Some name ->
 		name
 
-class context_cache (index : int) (sign : Digest.t) = object(self)
+class context_cache (index : int) (sign : module_sign) = object(self)
 	val files : (Path.UniqueKey.t,cached_file) Hashtbl.t = Hashtbl.create 0
 	val modules : (path,module_def) Hashtbl.t = Hashtbl.create 0
 	val binary_cache : (path,HxbData.module_cache) Hashtbl.t = Hashtbl.create 0
@@ -138,10 +138,10 @@ class arbitrary_task (id : string list) (priority : int) (f : unit -> unit) = ob
 end
 
 class cache = object(self)
-	val contexts : (string,context_cache) Hashtbl.t = Hashtbl.create 0
+	val contexts : (module_sign,context_cache) Hashtbl.t = Hashtbl.create 0
 	val mutable context_list = []
 	val haxelib : (string list, string list) Hashtbl.t = Hashtbl.create 0
-	val directories : (string, cached_directory list) Hashtbl.t = Hashtbl.create 0
+	val directories : (module_sign, cached_directory list) Hashtbl.t = Hashtbl.create 0
 	val native_libs : (string,cached_native_lib) Hashtbl.t = Hashtbl.create 0
 	val mutable tasks : (server_task PriorityQueue.t) = PriorityQueue.Empty
 
@@ -164,6 +164,14 @@ class cache = object(self)
 			Hashtbl.add contexts sign cache;
 			cache
 
+	method find_context sign_s =
+		try
+			let sign = (sign_s, false) in
+			Some (Hashtbl.find contexts sign, sign)
+		with Not_found ->
+			let sign = (sign_s, true) in
+			try Some (Hashtbl.find contexts sign, sign) with Not_found -> None
+
 	method add_info sign desc platform (class_paths : ClassPaths.class_paths) defines =
 		let cc = self#get_context sign in
 		let jo = JObject [
@@ -171,7 +179,7 @@ class cache = object(self)
 			"desc",JString desc;
 			"platform",JString (platform_name platform);
 			"classPaths",JArray (List.map (fun s -> JString s) class_paths#as_string_list);
-			"signature",JString (Digest.to_hex sign);
+			"signature",JString (Printer.s_module_sign sign);
 			"defines",JArray (PMap.foldi (fun k v acc -> JObject [
 				"key",JString k;
 				"value",JString v;

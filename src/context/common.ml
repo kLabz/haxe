@@ -305,8 +305,8 @@ class module_lut = object(self)
 			let p = t.mt_pos in
 			if m.m_path <> path2 && String.lowercase_ascii (s_type_path path2) = String.lowercase_ascii (s_type_path m.m_path) then Error.raise_typing_error ("Module " ^ s_type_path path2 ^ " is loaded with a different case than " ^ s_type_path m.m_path) p;
 			let m2 = self#find path2 in
-			let hex1 = Digest.to_hex m.m_extra.m_sign in
-			let hex2 = Digest.to_hex m2.m_extra.m_sign in
+			let hex1 = Printer.s_module_sign m.m_extra.m_sign in
+			let hex2 = Printer.s_module_sign m2.m_extra.m_sign in
 			let s = if hex1 = hex2 then hex1 else Printf.sprintf "was %s, is %s" hex2 hex1 in
 			Error.raise_typing_error (Printf.sprintf "Type name %s is redefined from module %s (%s)" (s_type_path t.mt_path)  (s_type_path path2) s) p
 		with Not_found ->

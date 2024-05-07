@@ -45,7 +45,7 @@ let rec scan_module_deps cs m h =
 	end
 
 let module_sign key md =
-	if md.m_extra.m_sign = key then "" else "(" ^ (try Digest.to_hex md.m_extra.m_sign with _ -> "???" ^ md.m_extra.m_sign) ^ ")"
+	if md.m_extra.m_sign = key then "" else "(" ^ (try Printer.s_module_sign md.m_extra.m_sign with _ -> "???" ^ (fst md.m_extra.m_sign)) ^ ")"
 
 let collect_leaks m deps out =
 	let leaks = ref [] in
@@ -187,106 +187,112 @@ let get_memory_json (cs : CompilationCache.t) mreq =
 			]
 		]
 	| MContext sign ->
-		let cc = cs#get_context sign in
-		let all_modules = List.fold_left (fun acc m -> PMap.add m.m_id m acc) PMap.empty cs#get_modules in
-		let l = Hashtbl.fold (fun _ m acc ->
-			(m,(get_module_memory cs all_modules m)) :: acc
-		) cc#get_modules [] in
-		let l = List.sort (fun (_,(size1,_)) (_,(size2,_)) -> compare size2 size1) l in
-		let leaks = ref [] in
-		let l = List.map (fun (m,(size,(reached,_,_,mleaks))) ->
-			if reached then leaks := (m,mleaks) :: !leaks;
-			jobject [
-				"path",jstring (s_type_path m.m_path);
-				"size",jint size;
-				"hasTypes",jbool (match m.m_extra.m_kind with MCode | MMacro -> true | _ -> false);
-			]
-		) l in
-		let leaks = match !leaks with
-			| [] -> jnull
-			| leaks ->
-				let jleaks = List.map (fun (m,leaks) ->
-					let jleaks = List.map (fun s -> jobject ["path",jstring s]) leaks in
-					jobject [
-						"path",jstring (s_type_path m.m_path);
-						"leaks",jarray jleaks;
-					]
-				) leaks in
-				jarray jleaks
-		in
-		let cache_mem = cc#get_pointers in
-		jobject [
-			"leaks",leaks;
-			"syntaxCache",jobject [
-				"size",jint (mem_size cache_mem.(0));
-			];
-			"moduleCache",jobject [
-				"size",jint (mem_size cache_mem.(1));
-				"list",jarray l;
-			];
-			"binaryCache",jobject [
-				"size",jint (mem_size cache_mem.(2));
-			];
-		]
-	| MModule(sign,path) ->
-		let cc = cs#get_context sign in
-		let m = cc#find_module path in
-		let all_modules = List.fold_left (fun acc m -> PMap.add m.m_id m acc) PMap.empty cs#get_modules in
-		let _,(_,deps,out,_) = get_module_memory cs all_modules m in
-		let deps = update_module_type_deps deps m in
-		let out = get_out out in
-		let types = List.map (fun md ->
-			let fields,inf = match md with
-				| TClassDecl c ->
-					let own_deps = ref deps in
-					let field acc cf =
-						let repr = Obj.repr cf in
-						own_deps := List.filter (fun repr' -> repr != repr') !own_deps;
-						let deps = List.filter (fun repr' -> repr' != repr) deps in
-						let size = Objsize.size_with_headers (Objsize.objsize cf deps out) in
-						(cf,size) :: acc
-					in
-					let fields = List.fold_left field [] c.cl_ordered_fields in
-					let fields = List.fold_left field fields c.cl_ordered_statics in
-					let fields = List.sort (fun (_,size1) (_,size2) -> compare size2 size1) fields in
-					let fields = List.map (fun (cf,size) ->
+		(match cs#find_context sign with
+		| Some (cc, sign) ->
+			let all_modules = List.fold_left (fun acc m -> PMap.add m.m_id m acc) PMap.empty cs#get_modules in
+			let l = Hashtbl.fold (fun _ m acc ->
+				(m,(get_module_memory cs all_modules m)) :: acc
+			) cc#get_modules [] in
+			let l = List.sort (fun (_,(size1,_)) (_,(size2,_)) -> compare size2 size1) l in
+			let leaks = ref [] in
+			let l = List.map (fun (m,(size,(reached,_,_,mleaks))) ->
+				if reached then leaks := (m,mleaks) :: !leaks;
+				jobject [
+					"path",jstring (s_type_path m.m_path);
+					"size",jint size;
+					"hasTypes",jbool (match m.m_extra.m_kind with MCode | MMacro -> true | _ -> false);
+				]
+			) l in
+			let leaks = match !leaks with
+				| [] -> jnull
+				| leaks ->
+					let jleaks = List.map (fun (m,leaks) ->
+						let jleaks = List.map (fun s -> jobject ["path",jstring s]) leaks in
 						jobject [
-							"name",jstring cf.cf_name;
-							"size",jint size;
-							"pos",generate_pos_as_location cf.cf_name_pos;
+							"path",jstring (s_type_path m.m_path);
+							"leaks",jarray jleaks;
 						]
-					) fields in
-					let repr = Obj.repr c in
-					let deps = List.filter (fun repr' -> repr' != repr) !own_deps in
-					fields,Objsize.objsize c deps out
-				| TEnumDecl en ->
-					let repr = Obj.repr en in
-					let deps = List.filter (fun repr' -> repr' != repr) deps in
-					[],Objsize.objsize en deps out
-				| TTypeDecl td ->
-					let repr = Obj.repr td in
-					let deps = List.filter (fun repr' -> repr' != repr) deps in
-					[],Objsize.objsize td deps out
-				| TAbstractDecl a ->
-					let repr = Obj.repr a in
-					let deps = List.filter (fun repr' -> repr' != repr) deps in
-					[],Objsize.objsize a deps out
+					) leaks in
+					jarray jleaks
 			in
-			let size = Objsize.size_with_headers inf in
-			let jo = jobject [
-				"name",jstring (s_type_path (t_infos md).mt_path);
-				"size",jint size;
-				"pos",generate_pos_as_location (t_infos md).mt_name_pos;
-				"fields",jarray fields;
-			] in
-			size,jo
-		) m.m_types in
-		let types = List.sort (fun (size1,_) (size2,_) -> compare size2 size1) types in
-		let types = List.map snd types in
-		jobject [
-			"moduleExtra",jint (Objsize.size_with_headers (Objsize.objsize m.m_extra deps out));
-			"types",jarray types;
-		]
+			let cache_mem = cc#get_pointers in
+			jobject [
+				"leaks",leaks;
+				"syntaxCache",jobject [
+					"size",jint (mem_size cache_mem.(0));
+				];
+				"moduleCache",jobject [
+					"size",jint (mem_size cache_mem.(1));
+					"list",jarray l;
+				];
+				"binaryCache",jobject [
+					"size",jint (mem_size cache_mem.(2));
+				];
+			]
+		| None ->
+			raise Not_found)
+	| MModule(sign,path) ->
+		(match cs#find_context sign with
+		| Some (cc, sign) ->
+			let m = cc#find_module path in
+			let all_modules = List.fold_left (fun acc m -> PMap.add m.m_id m acc) PMap.empty cs#get_modules in
+			let _,(_,deps,out,_) = get_module_memory cs all_modules m in
+			let deps = update_module_type_deps deps m in
+			let out = get_out out in
+			let types = List.map (fun md ->
+				let fields,inf = match md with
+					| TClassDecl c ->
+						let own_deps = ref deps in
+						let field acc cf =
+							let repr = Obj.repr cf in
+							own_deps := List.filter (fun repr' -> repr != repr') !own_deps;
+							let deps = List.filter (fun repr' -> repr' != repr) deps in
+							let size = Objsize.size_with_headers (Objsize.objsize cf deps out) in
+							(cf,size) :: acc
+						in
+						let fields = List.fold_left field [] c.cl_ordered_fields in
+						let fields = List.fold_left field fields c.cl_ordered_statics in
+						let fields = List.sort (fun (_,size1) (_,size2) -> compare size2 size1) fields in
+						let fields = List.map (fun (cf,size) ->
+							jobject [
+								"name",jstring cf.cf_name;
+								"size",jint size;
+								"pos",generate_pos_as_location cf.cf_name_pos;
+							]
+						) fields in
+						let repr = Obj.repr c in
+						let deps = List.filter (fun repr' -> repr' != repr) !own_deps in
+						fields,Objsize.objsize c deps out
+					| TEnumDecl en ->
+						let repr = Obj.repr en in
+						let deps = List.filter (fun repr' -> repr' != repr) deps in
+						[],Objsize.objsize en deps out
+					| TTypeDecl td ->
+						let repr = Obj.repr td in
+						let deps = List.filter (fun repr' -> repr' != repr) deps in
+						[],Objsize.objsize td deps out
+					| TAbstractDecl a ->
+						let repr = Obj.repr a in
+						let deps = List.filter (fun repr' -> repr' != repr) deps in
+						[],Objsize.objsize a deps out
+				in
+				let size = Objsize.size_with_headers inf in
+				let jo = jobject [
+					"name",jstring (s_type_path (t_infos md).mt_path);
+					"size",jint size;
+					"pos",generate_pos_as_location (t_infos md).mt_name_pos;
+					"fields",jarray fields;
+				] in
+				size,jo
+			) m.m_types in
+			let types = List.sort (fun (size1,_) (size2,_) -> compare size2 size1) types in
+			let types = List.map snd types in
+			jobject [
+				"moduleExtra",jint (Objsize.size_with_headers (Objsize.objsize m.m_extra deps out));
+				"types",jarray types;
+			]
+		| None ->
+			raise Not_found)
 	end
 
 let display_memory com =
@@ -308,11 +314,11 @@ let display_memory com =
 		let (size,r) = get_module_memory c all_modules m in
 		(m,size,r) :: acc
 	) [] module_list in
-	let cur_key = ref "" and tcount = ref 0 and mcount = ref 0 in
+	let cur_key = ref ("",false) and tcount = ref 0 and mcount = ref 0 in
 	List.iter (fun (m,size,(reached,deps,out,leaks)) ->
 		let key = m.m_extra.m_sign in
 		if key <> !cur_key then begin
-			print (Printf.sprintf ("    --- CONFIG %s ----------------------------") (Digest.to_hex key));
+			print (Printf.sprintf ("    --- CONFIG %s ----------------------------") (Printer.s_module_sign key));
 			cur_key := key;
 		end;
 		print (Printf.sprintf "    %s : %s" (s_type_path m.m_path) (fmt_size size));

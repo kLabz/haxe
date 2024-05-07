@@ -6,11 +6,11 @@ type t = {
 	(* If true, prints some debug information *)
 	verbose : bool;
 	(* The list of changed directories per-signature *)
-	changed_directories : (Digest.t,cached_directory list) Hashtbl.t;
+	changed_directories : (TType.module_sign,cached_directory list) Hashtbl.t;
 	(* A reference to the compilation server instance *)
 	cs : CompilationCache.t;
 	(* A list of class paths per-signature *)
-	class_paths : (Digest.t,string list) Hashtbl.t;
+	class_paths : (TType.module_sign,string list) Hashtbl.t;
 	(* Increased for each compilation *)
 	mutable compilation_step : int;
 	(* A list of delays which are run after compilation *)

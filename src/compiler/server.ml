@@ -165,7 +165,7 @@ let stat dir =
 let get_changed_directories sctx com =
 	let t = Timer.timer ["server";"module cache";"changed dirs"] in
 	let cs = sctx.cs in
-	let sign = Define.get_signature com.defines in
+	let sign = Define.get_signature com.defines com.is_macro_context in
 	let dirs = try
 		(* First, check if we already have determined changed directories for current compilation. *)
 		Hashtbl.find sctx.changed_directories sign
@@ -194,7 +194,7 @@ let get_changed_directories sctx com =
 					ServerMessage.removed_directory com "" dir.c_path;
 					acc
 			) [] all_dirs in
-			ServerMessage.changed_directories com "" dirs;
+			ServerMessage.changed_directories com ("",false) dirs;
 			dirs
 		with Not_found ->
 			(* There were no directories in the cache, so this must be a new context. Let's add
@@ -619,7 +619,7 @@ let before_anything sctx ctx =
 let after_target_init sctx ctx =
 	let com = ctx.com in
 	let cs = sctx.cs in
-	let sign = Define.get_signature com.defines in
+	let sign = Define.get_signature com.defines com.is_macro_context in
 	ServerMessage.defines com "";
 	ServerMessage.signature com "" sign;
 	ServerMessage.display_position com "" (DisplayPosition.display_position#get);

@@ -220,7 +220,7 @@ let null_module = {
 	m_path = [] , "";
 	m_types = [];
 	m_statics = None;
-	m_extra = module_extra "" (Digest.string "") 0. MFake 0 [];
+	m_extra = module_extra "" (Digest.string "", false) 0. MFake 0 [];
 }
 
 let null_class =

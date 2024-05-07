@@ -381,6 +381,8 @@ and tabstract = {
 	mutable a_enum : bool;
 }
 
+and module_sign = (Digest.t * bool (* is macro context *))
+
 and module_type =
 	| TClassDecl of tclass
 	| TEnumDecl of tenum
@@ -406,7 +408,7 @@ and module_dep_origin =
 	| MDepFromMacro
 
 and module_dep = {
-	md_sign : Digest.t;
+	md_sign : module_sign;
 	md_kind : module_kind;
 	md_path : path;
 	md_origin : module_dep_origin
@@ -414,7 +416,7 @@ and module_dep = {
 
 and module_def_extra = {
 	m_file : Path.UniqueKey.lazy_t;
-	m_sign : Digest.t;
+	m_sign : module_sign;
 	m_display : module_def_display;
 	mutable m_check_policy : module_check_policy list;
 	mutable m_time : float;
@@ -436,7 +438,7 @@ and class_field_ref_kind =
 	| CfrInit
 
 and class_field_ref = {
-	cfr_sign : string;
+	cfr_sign : module_sign;
 	cfr_path : path;
 	cfr_field : string;
 	cfr_kind : class_field_ref_kind;
