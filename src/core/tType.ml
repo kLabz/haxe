@@ -405,6 +405,7 @@ and module_def_display = {
 
 and module_dep_origin =
 	| MDepFromTyping
+	| MDepFromImport
 	| MDepFromMacro
 
 and module_dep = {

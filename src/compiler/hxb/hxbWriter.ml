@@ -468,7 +468,7 @@ module HxbWriter = struct
 		let initial_size = match kind with
 			| EOT | EOF | EOM -> 0
 			| MDF -> 16
-			| MTF | MDR | CLR | END | ABD | ENR | ABR | TDR | EFR | CFR | AFD -> 64
+			| MTF | DEP | CLR | END | ABD | ENR | ABR | TDR | EFR | CFR | AFD -> 64
 			| OFR | OFD | OBD | CLD | TDD | EFD -> 128
 			| STR | DOC -> 256
 			| CFD | EXD -> 512
@@ -2239,35 +2239,26 @@ module HxbWriter = struct
 			) anons_without_context
 		end;
 
-		begin
-			let deps = DynArray.create () in
-			PMap.iter (fun _ mdep ->
-				match mdep.md_kind with
-				| MCode | MExtern when mdep.md_sign = m.m_extra.m_sign ->
-					DynArray.add deps mdep.md_path;
-				| _ ->
-					()
-			) m.m_extra.m_deps;
-			if DynArray.length deps > 0 then begin
-				start_chunk writer MDR;
-				Chunk.write_uleb128 writer.chunk (DynArray.length deps);
-				DynArray.iter (fun path ->
-					write_path writer path
-				) deps
-			end
-		end;
-
 		(* Note: this is only a start, and is still including a lot of dependencies *)
 		(* that are not actually needed for signature only. *)
 		let sig_deps = ref PMap.empty in
-		PMap.iter (fun id mdep -> match mdep.md_origin with
-			| MDepFromMacro -> sig_deps := PMap.add id mdep !sig_deps;
-			| _ -> ()
-		) m.m_extra.m_deps;
 		List.iter (fun mdep ->
 			let dep = {md_sign = mdep.m_extra.m_sign; md_path = mdep.m_path; md_kind = mdep.m_extra.m_kind; md_origin = MDepFromTyping} in
 			sig_deps := PMap.add mdep.m_id dep !sig_deps;
 		) writer.sig_deps;
+		PMap.iter (fun id mdep -> match mdep.md_kind, mdep.md_origin with
+			| (MCode | MExtern), (MDepFromMacro | MDepFromImport) -> sig_deps := PMap.add id mdep !sig_deps;
+			| _ -> ()
+		) m.m_extra.m_deps;
+
+		if not (PMap.is_empty !sig_deps) then begin
+			start_chunk writer DEP;
+			let len = PMap.fold (fun _ acc -> acc + 1) !sig_deps 0 in
+			Chunk.write_uleb128 writer.chunk (len);
+			PMap.iter (fun _ md ->
+				write_path writer md.md_path
+			) !sig_deps
+		end;
 		m.m_extra.m_sig_deps <- Some !sig_deps;
 
 		start_chunk writer EOT;

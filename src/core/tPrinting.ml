@@ -612,6 +612,11 @@ module Printer = struct
 		| MExtern -> "MExtern"
 		| MImport -> "MImport"
 
+	let s_module_origin = function
+		| MDepFromImport -> "MDepFromImport"
+		| MDepFromTyping -> "MDepFromTyping"
+		| MDepFromMacro -> "MDepFromMacro"
+
 	let s_module_sign sign =
 		let hex = Digest.to_hex (fst sign) in
 		if snd sign then "[macro] " ^ hex else hex
