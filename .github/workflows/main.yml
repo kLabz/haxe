@@ -125,11 +125,6 @@ jobs:
     env:
       PLATFORM: linux64
       OPAMYES: 1
-    strategy:
-      fail-fast: false
-      matrix:
-        # ocaml: ["4.08.1", "5.0.0"]
-        ocaml: ["5.1.0"]
     steps:
       - uses: actions/checkout@main
         with:
@@ -140,7 +135,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.opam/
-          key: ${{ runner.os }}-${{ matrix.ocaml }}-${{ hashFiles('./haxe.opam', './libs/') }}
+          key: ${{ runner.os }}-5.1.0-${{ hashFiles('./haxe.opam', './libs/') }}
 
       - name: Install Neko from S3
         run: |
@@ -176,7 +171,7 @@ jobs:
           set -ex
           opam init # --disable-sandboxing
           opam update
-          opam switch create ${{ matrix.ocaml }}
+          opam switch create 5.1.0
           opam pin add haxe . --no-action
           opam install haxe --deps-only --assume-depexts
           opam list
@@ -204,7 +199,6 @@ jobs:
         run: echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
 
       - name: Build xmldoc
-        # if: matrix.ocaml == '4.08.1'
         run: |
           set -ex
           make -s xmldoc
@@ -219,12 +213,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: linuxBinaries
-          # name: linuxBinaries${{ (matrix.ocaml == '5.0.0' && '_ocaml5') || '' }}
           path: out
 
       - name: Upload xmldoc artifact
         uses: actions/upload-artifact@v4
-        # if: matrix.ocaml == '4.08.1'
         with:
           name: xmldoc
           path: extra/doc
