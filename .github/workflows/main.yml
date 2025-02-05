@@ -114,7 +114,7 @@ jobs:
           [ $(ls -1 out | wc -l) -eq "3" ]
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: win${{env.ARCH}}Binaries
           path: out
@@ -248,7 +248,7 @@ jobs:
           [ $(ls -1 out | wc -l) -eq "3" ]
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: win${{env.ARCH}}Binaries
           path: out
@@ -347,13 +347,13 @@ jobs:
           EOL
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: linuxBinaries${{ (matrix.ocaml == '5.0.0' && '_ocaml5') || '' }}
           path: out
 
       - name: Upload xmldoc artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: matrix.ocaml == '4.08.1'
         with:
           name: xmldoc
@@ -385,7 +385,7 @@ jobs:
       - uses: actions/checkout@main
         with:
           submodules: recursive
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: linuxBinaries${{ (matrix.ocaml == '5.0.0' && '_ocaml5') || '' }}
           path: linuxBinaries
@@ -455,13 +455,13 @@ jobs:
         with:
           submodules: recursive
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: linuxBinaries
           path: linuxBinaries
 
       - name: Download xmldoc artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: xmldoc
           path: xmldoc
@@ -573,7 +573,7 @@ jobs:
           EARTHLY_REMOTE_CACHE: "ghcr.io/${{env.CONTAINER_REG}}_cache:build-${{env.CONTAINER_TAG}}-arm64"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: linuxArm64Binaries
           path: out/linux/arm64
@@ -678,7 +678,7 @@ jobs:
           otool -L ./haxelib
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: macBinaries
           path: out
@@ -702,7 +702,7 @@ jobs:
       - uses: actions/checkout@main
         with:
           submodules: recursive
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: win${{env.ARCH}}Binaries
           path: win${{env.ARCH}}Binaries
@@ -799,7 +799,7 @@ jobs:
       - uses: actions/checkout@main
         with:
           submodules: recursive
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: win${{env.ARCH}}Binaries
           path: win${{env.ARCH}}Binaries
@@ -896,7 +896,7 @@ jobs:
       - uses: actions/checkout@main
         with:
           submodules: recursive
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: macBinaries
           path: macBinaries
@@ -964,7 +964,7 @@ jobs:
         uses: actions/checkout@main
 
       - name: Download build artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
 
       - name: Install awscli
         run: |
@@ -1039,7 +1039,7 @@ jobs:
           sudo apt-get install -qqy libc6
 
       - name: Download Haxe
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: linuxBinaries
           path: linuxBinaries
@@ -1055,7 +1055,7 @@ jobs:
           sudo ln -s `pwd`/linuxBinaries/std /usr/local/share/haxe/std
 
       - name: Download xmldoc artifact
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: xmldoc
           path: xmldoc
