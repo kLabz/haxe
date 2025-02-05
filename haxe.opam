@@ -25,13 +25,13 @@ depends: [
   "dune" {>= "1.11"}
   "sedlex" {>= "2.0"}
   "xml-light"
-  "extlib" {>= "1.7.8"}
+  "extlib" {= "1.7.8"}
   "sha"
   "camlp-streams"
   "conf-libpcre2-8"
   "conf-zlib"
   "conf-neko"
-  "luv" {>= "0.5.12"}
+  "luv" {= "0.5.12"}
   "ipaddr"
   "terminal_size"
 ]
