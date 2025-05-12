@@ -5,21 +5,32 @@ open Type
 type safety_message = {
 	sm_msg : string;
 	sm_pos : pos;
-	sm_type : WarningList.warning option
+}
+
+type safety_warning = {
+	sw_warning : WarningList.warning;
+	sw_options : warning_option list list;
+	sw_msg : string;
+	sw_pos : pos;
 }
 
 type safety_report = {
 	mutable sr_errors : safety_message list;
-	mutable sr_warnings: safety_message list;
+	mutable sr_warnings: safety_warning list;
 }
 
 let add_error report msg pos =
-	let error = { sm_type = None; sm_msg = ("Null safety: " ^ msg); sm_pos = pos; } in
+	let error = { sm_msg = ("Null safety: " ^ msg); sm_pos = pos; } in
 	if not (List.mem error report.sr_errors) then
 		report.sr_errors <- error :: report.sr_errors;;
 
-let add_warning report wtype msg pos =
-	let warning = { sm_type = Some wtype; sm_msg = ("Null safety: " ^ msg); sm_pos = pos; } in
+let add_warning report wtype options msg pos =
+	let warning = {
+		sw_warning = wtype;
+		sw_options = options;
+		sw_msg = ("Null safety: " ^ msg);
+		sw_pos = pos;
+	} in
 	if not (List.mem warning report.sr_warnings) then
 		report.sr_warnings <- warning :: report.sr_warnings;
 
@@ -1053,7 +1064,7 @@ class local_safety (mode:safety_mode) =
 (**
 	This class is used to recursively check typed expressions for null-safety
 *)
-class expr_checker mode immediate_execution report =
+class expr_checker mode immediate_execution report options =
 	object (self)
 		val local_safety = new local_safety mode
 		val mutable return_types = []
@@ -1090,7 +1101,8 @@ class expr_checker mode immediate_execution report =
 							if p <> null_pos then p
 							else get_first_valid_pos rest
 				in
-				add_warning report wtype msg (get_first_valid_pos positions)
+				(* TODO field options *)
+				add_warning report wtype options msg (get_first_valid_pos positions)
 			end
 
 		method private check_binop_redundant_null_checks e =
@@ -1099,6 +1111,7 @@ class expr_checker mode immediate_execution report =
 				| TBinop ((OpEq | OpNotEq), expr, { eexpr = TConst TNull })
 				| TBinop(OpAssignOp OpNullCoal, expr, _)
 				| TBinop (OpNullCoal, expr, _) ->
+					(* TODO field options *)
 					if not (is_nullable_type ~dynamic_is_nullable:true expr.etype) then
 						self#warning
 							WRedundantNullCheck
@@ -1573,7 +1586,8 @@ class class_checker cls immediate_execution report (main_expr : texpr option) =
 	let cls_meta = cls.cl_meta @ (match cls.cl_kind with KAbstractImpl a -> a.a_meta | _ -> []) in
 	object (self)
 			val is_safe_class = (safety_enabled cls_meta)
-			val mutable checker = new expr_checker SMLoose immediate_execution report
+			(* TODO: field meta *)
+			val mutable checker = new expr_checker SMLoose immediate_execution report (Warning.from_meta cls_meta)
 			val mutable mode : safety_mode option = None
 		(**
 			Entry point for checking a class
@@ -1644,7 +1658,8 @@ class class_checker cls immediate_execution report (main_expr : texpr option) =
 		*)
 		method private get_checker mode =
 			if checker#get_mode <> mode then
-				checker <- new expr_checker mode immediate_execution report;
+				(* TODO field meta *)
+				checker <- new expr_checker mode immediate_execution report (Warning.from_meta cls_meta);
 			checker
 		(**
 			Check if field should be checked by null safety
@@ -1836,21 +1851,23 @@ let run (com:Common.context) (types:module_type list) =
 	) () in
 	match com.callbacks#get_null_safety_report with
 		| [] ->
-			List.iter (fun warn ->
-				com.warning (Option.get warn.sm_type) [] warn.sm_msg warn.sm_pos
-			) (List.rev report.sr_warnings);
-
 			List.iter (fun err ->
 				Common.display_error com err.sm_msg err.sm_pos
-			) (List.rev report.sr_errors)
+			) (List.rev report.sr_errors);
+			List.iter (fun warn ->
+				com.warning warn.sw_warning warn.sw_options warn.sw_msg warn.sw_pos
+			) (List.rev report.sr_warnings);
 		| callbacks ->
-			let warnings =
-				List.map (fun warn -> (warn.sm_type, warn.sm_msg, warn.sm_pos)) report.sr_warnings
-			in
 			let errors =
-				List.map (fun err -> (err.sm_type, err.sm_msg, err.sm_pos)) report.sr_errors
+				List.map (fun err -> (err.sm_msg, err.sm_pos)) report.sr_errors
 			in
-			let all = warnings @ errors in
-			List.iter (fun fn -> fn all) callbacks
+			let warnings =
+				List.filter_map (fun w ->
+					match Warning.get_mode w.sw_warning (w.sw_options @ com.warning_options) with
+					| WMEnable -> Some (w.sw_warning, w.sw_msg, w.sw_pos)
+					| WMDisable -> None
+				) report.sr_warnings
+			in
+			List.iter (fun fn -> fn errors warnings) callbacks
 
 ;;
