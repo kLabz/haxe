@@ -2471,7 +2471,7 @@ let check comerror code =
 			| OToVirtual (r,v) ->
 				(match rtype r with
 				| HVirtual _ -> ()
-				| _ -> reg r (HVirtual {vfields=[||];vindex=PMap.empty;}));
+				| _ -> reg r (HVirtual {vfields=[||];vindex=PMap.empty;vpath=([],"")}));
 				(match rtype v with
 				| HObj _ | HDynObj | HDyn | HVirtual _ -> ()
 				| _ -> reg v HDynObj)

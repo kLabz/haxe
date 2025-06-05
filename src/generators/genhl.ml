@@ -58,7 +58,7 @@ type method_context = {
 	mvars : (int, int) Hashtbl.t;
 	mhasthis : bool;
 	mutable mdeclared : int list;
-	mutable mallocs : (ttype, allocator) PMap.t;
+	mutable mallocs : (ttype, allocator) Hashtbl.t;
 	mutable mcaptured : method_capture;
 	mutable mcontinues : (int -> unit) list;
 	mutable mbreaks : (int -> unit) list;
@@ -103,7 +103,9 @@ type context = {
 	defined_funs : (int,unit) Hashtbl.t;
 	mutable cached_types : (string list, ttype) PMap.t;
 	mutable m : method_context;
-	mutable anons_cache : (tanon, ttype) PMap.t;
+	anons : (path,ttype) HxbWriter.Pool.t;
+	anon_id : Type.t Tanon_identification.tanon_identification;
+	identified_anons : (tanon,int) HxbWriter.IdentityPool.t;
 	mutable method_wrappers : ((ttype * ttype), int) PMap.t;
 	mutable rec_cache : (Type.t * ttype option ref) list;
 	mutable cached_tuples : (ttype list, ttype) PMap.t;
@@ -240,7 +242,7 @@ let method_context id t captured hasthis =
 		mregs = new_lookup();
 		mops = DynArray.create();
 		mvars = Hashtbl.create 0;
-		mallocs = PMap.empty;
+		mallocs = Hashtbl.create 0;
 		mret = t;
 		mbreaks = [];
 		mdeclared = [];
@@ -407,24 +409,30 @@ let rec to_type ?tref ctx t =
 	| TAnon a ->
 		if PMap.is_empty a.a_fields then HDyn else
 		(try
-			(* can't use physical comparison in PMap since addresses might change in GC compact,
-				maybe add an uid to tanon if too slow ? *)
-			PMap.find a ctx.anons_cache
+			let i = HxbWriter.IdentityPool.get ctx.identified_anons a in
+			DynArray.get ctx.anons.items i
 		with Not_found ->
-			let vp = {
-				vfields = [||];
-				vindex = PMap.empty;
-			} in
-			let t = HVirtual vp in
-			(match tref with
-			| None -> ()
-			| Some r -> r := Some t);
-			ctx.anons_cache <- PMap.add a t ctx.anons_cache;
-			let fields = PMap.fold (fun cf acc -> cfield_type ctx cf :: acc) a.a_fields [] in
-			let fields = List.sort (fun (n1,_,_) (n2,_,_) -> compare n1 n2) fields in
-			vp.vfields <- Array.of_list fields;
-			Array.iteri (fun i (n,_,_) -> vp.vindex <- PMap.add n i vp.vindex) vp.vfields;
-			t
+			let pfm = ctx.anon_id#identify_anon ~strict:true a in
+			try
+				let i = HxbWriter.Pool.get ctx.anons pfm.pfm_path in
+				DynArray.get ctx.anons.items i
+			with Not_found ->
+				let vp = {
+					vfields = [||];
+					vindex = PMap.empty;
+					vpath = pfm.pfm_path;
+				} in
+				let t = HVirtual vp in
+				(match tref with
+				| None -> ()
+				| Some r -> r := Some t);
+				let i = HxbWriter.Pool.add ctx.anons pfm.pfm_path t in
+				ignore(HxbWriter.IdentityPool.add ctx.identified_anons a i);
+				let fields = PMap.fold (fun cf acc -> cfield_type ctx cf :: acc) a.a_fields [] in
+				let fields = List.sort (fun (n1,_,_) (n2,_,_) -> compare n1 n2) fields in
+				vp.vfields <- Array.of_list fields;
+				Array.iteri (fun i (n,_,_) -> vp.vindex <- PMap.add n i vp.vindex) vp.vfields;
+				t
 		)
 	| TDynamic _ ->
 		HDyn
@@ -558,6 +566,7 @@ and class_type ?(tref=None) ctx c pl statics =
 		let vp = {
 			vfields = [||];
 			vindex = PMap.empty;
+			vpath = ([],"");
 		} in
 		let t = HVirtual vp in
 		ctx.cached_types <- PMap.add key_path t ctx.cached_types;
@@ -847,12 +856,12 @@ and alloc_fresh ctx t =
 
 and alloc_tmp ctx t =
 	if not ctx.optimize then alloc_fresh ctx t else
-	let a = try PMap.find t ctx.m.mallocs with Not_found ->
+	let a = try Hashtbl.find ctx.m.mallocs t with Not_found ->
 		let a = {
 			a_all = [];
 			a_hold = [];
 		} in
-		ctx.m.mallocs <- PMap.add t a ctx.m.mallocs;
+		Hashtbl.add ctx.m.mallocs t a;
 		a
 	in
 	match a.a_all with
@@ -872,7 +881,7 @@ and rtype ctx r =
 and hold ctx r =
 	if not ctx.optimize then () else
 	let t = rtype ctx r in
-	let a = PMap.find t ctx.m.mallocs in
+	let a = Hashtbl.find ctx.m.mallocs t in
 	let rec loop l =
 		match l with
 		| [] -> if List.mem r a.a_hold then [] else die "" __LOC__
@@ -885,7 +894,7 @@ and hold ctx r =
 and free ctx r =
 	if not ctx.optimize then () else
 	let t = rtype ctx r in
-	let a = PMap.find t ctx.m.mallocs in
+	let a = Hashtbl.find ctx.m.mallocs t in
 	let last = ref true in
 	let rec loop l =
 		match l with
@@ -3873,7 +3882,7 @@ let write_code ch code debug =
 	let write_index = write_index_gen byte in
 
 	let write_type t =
-		write_index (try PMap.find t htypes with Not_found -> die (tstr t) __LOC__)
+		write_index (try Hashtbl.find htypes t with Not_found -> die (tstr t) __LOC__)
 	in
 
 	let write_op op =
@@ -4206,7 +4215,9 @@ let create_context com =
 		core_type = get_class "CoreType";
 		core_enum = get_class "CoreEnum";
 		ref_abstract = get_abstract "Ref";
-		anons_cache = PMap.empty;
+		anons = HxbWriter.Pool.create ();
+		anon_id = new Tanon_identification.tanon_identification;
+		identified_anons = HxbWriter.IdentityPool.create();
 		rec_cache = [];
 		method_wrappers = PMap.empty;
 		cdebug_files = new_lookup();

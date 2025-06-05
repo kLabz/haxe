@@ -66,7 +66,7 @@ type global_context = {
 	dir : string;
 	mutable cfiles : string list;
 	ftable : function_entry array;
-	htypes : (ttype, string) PMap.t;
+	htypes : (ttype, string) Hashtbl.t;
 	gnames : string array;
 	bytes_names : string array;
 	mutable type_module : (ttype, code_module) PMap.t;
@@ -120,7 +120,7 @@ let s_comp = function
 	| CNeq -> "!="
 
 let core_types =
-	let vp = { vfields = [||]; vindex = PMap.empty } in
+	let vp = { vfields = [||]; vindex = PMap.empty; vpath = ([],"")} in
 	let ep = { ename = ""; eid = 0; eglobal = None; efields = [||] } in
 	[HVoid;HUI8;HUI16;HI32;HI64;HF32;HF64;HBool;HBytes;HDyn;HFun ([],HVoid);HObj null_proto;HArray HDyn;HType;HRef HVoid;HVirtual vp;HDynObj;HAbstract ("",0);HEnum ep;HNull HVoid;HMethod ([],HVoid);HStruct null_proto]
 
@@ -237,7 +237,7 @@ let hash ctx sid =
 	)
 
 let type_name ctx t =
-	try PMap.find t ctx.htypes with Not_found -> Globals.die (tstr t) __LOC__
+	try Hashtbl.find ctx.htypes t with Not_found -> Globals.die (tstr t) __LOC__
 
 let define ctx s =
 	if not (Hashtbl.mem ctx.hdefines s) then begin
@@ -276,7 +276,7 @@ let enum_constr_type gctx ctx e i =
 		"venum"
 	else
 	let name = if e.eid = 0 then
-		let name = (try PMap.find (HEnum e) gctx.htypes with Not_found -> Globals.die "" __LOC__) in
+		let name = (try Hashtbl.find gctx.htypes (HEnum e) with Not_found -> Globals.die "" __LOC__) in
 		"Enum" ^ name
 	else
 		String.concat "_" (ExtString.String.nsplit e.ename ".")
@@ -1229,7 +1229,9 @@ let make_types_idents htypes =
 		| DContext _ ->
 			"t$ctx_" ^ (make_sign d)
 	in
-	PMap.mapi (fun t _ -> desc_string (make_desc t)) htypes
+	let new_tbl = Hashtbl.create (Hashtbl.length htypes) in
+	Hashtbl.iter (fun t _ -> Hashtbl.add new_tbl t (desc_string (make_desc t))) htypes;
+	new_tbl
 
 let make_global_names code gnames =
 	let hstrings = Hashtbl.create 0 in
@@ -1412,7 +1414,7 @@ let make_modules ctx all_types =
 		let m = (try PMap.find t !contexts with Not_found -> None) in
 		let m = (match m with
 			| None ->
-				let tname = PMap.find t ctx.htypes in
+				let tname = Hashtbl.find ctx.htypes t in
 				get_module ("hl/ctx/" ^ String.sub tname 8 (String.length tname - 8))
 			| Some m ->
 				m

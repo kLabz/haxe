@@ -83,6 +83,7 @@ and field_proto = {
 and virtual_proto = {
 	mutable vfields : (string * string index * ttype) array;
 	mutable vindex : (string, int) PMap.t;
+	mutable vpath : Globals.path;
 }
 
 type unused = int
@@ -302,16 +303,7 @@ let rec tsame t1 t2 =
 	| HEnum e1, HEnum e2 -> e1 == e2
 	| HStruct p1, HStruct p2 -> p1 == p2
 	| HAbstract (_,a1), HAbstract (_,a2) -> a1 == a2
-	| HVirtual v1, HVirtual v2 ->
-		if v1 == v2 then true else
-		if Array.length v1.vfields <> Array.length v2.vfields then false else
-		let rec loop i =
-			if i = Array.length v1.vfields then true else
-			let _, i1, t1 = v1.vfields.(i) in
-			let _, i2, t2 = v2.vfields.(i) in
-			if i1 = i2 && tsame t1 t2 then loop (i + 1) else false
-		in
-		loop 0
+	| HVirtual v1, HVirtual v2 -> v1.vpath == v2.vpath
 	| HNull t1, HNull t2 -> tsame t1 t2
 	| HRef t1, HRef t2 -> tsame t1 t2
 	| _ -> false
@@ -409,17 +401,17 @@ let resolve_field p fid =
 	loop [] p
 
 let gather_types (code:code) =
-	let types = ref PMap.empty in
+	let types = Hashtbl.create 0 in
 	let arr = DynArray.create() in
 	let rec get_type t =
 		(match t with
 		| HObj { psuper = Some p } -> get_type (HObj p)
 		| HStruct { psuper = Some p } -> get_type (HStruct p)
 		| _ -> ());
-		if PMap.mem t !types then () else
+		if Hashtbl.mem types t then () else
 		let index = DynArray.length arr in
 		DynArray.add arr t;
-		types := PMap.add t index !types;
+		Hashtbl.add types t index;
 		match t with
 		| HFun (args, ret) | HMethod (args, ret) ->
 			List.iter get_type args;
@@ -446,7 +438,7 @@ let gather_types (code:code) =
 			| _ -> ()
 		) f.code;
 	) code.functions;
-	DynArray.to_array arr, !types
+	DynArray.to_array arr, types
 
 let lookup_type types t =
 	try PMap.find t types with Not_found -> Globals.die "" __LOC__
