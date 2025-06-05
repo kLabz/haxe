@@ -566,7 +566,7 @@ and class_type ?(tref=None) ctx c pl statics =
 		let vp = {
 			vfields = [||];
 			vindex = PMap.empty;
-			vpath = ([],"");
+			vpath = c.cl_path;
 		} in
 		let t = HVirtual vp in
 		ctx.cached_types <- PMap.add key_path t ctx.cached_types;
