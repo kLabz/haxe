@@ -303,7 +303,7 @@ let rec tsame t1 t2 =
 	| HEnum e1, HEnum e2 -> e1 == e2
 	| HStruct p1, HStruct p2 -> p1 == p2
 	| HAbstract (_,a1), HAbstract (_,a2) -> a1 == a2
-	| HVirtual v1, HVirtual v2 -> v1.vpath == v2.vpath
+	| HVirtual v1, HVirtual v2 -> v1 == v2 && v1.vpath == v2.vpath
 	| HNull t1, HNull t2 -> tsame t1 t2
 	| HRef t1, HRef t2 -> tsame t1 t2
 	| _ -> false
