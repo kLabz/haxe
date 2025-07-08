@@ -35,16 +35,17 @@ class Issue12001 extends TestCase {
 		vfs.putContent("Main.hx", getTemplate("issues/Issue12001/Main.hx"));
 		var args = ["-main", "Main", "--interp", "--macro", "Macro.defineType()"];
 		var i = 0;
+
+		@:coroutine
 		function test() {
 			// Was failing with nightlies (HxbFailure)
-			runHaxe(args, () -> {
-				assertSuccess();
-				assertHasPrint("Foo.test() = " + i);
-				if (++i >= 5) async.done();
-				else test();
-			});
+			runHaxe(args);
+			assertSuccess();
+			assertHasPrint("Foo.test() = " + i);
+			if (++i >= 5) async.done();
+			else test();
 		}
-		test();
+		hxcoro.CoroRun.run(test);
 	}
 
 	function testDefineModule(_) {
@@ -79,16 +80,17 @@ class Issue12001 extends TestCase {
 		vfs.putContent("Main.hx", getTemplate("issues/Issue12001/Main1.hx"));
 		var args = ["-main", "Main", "--interp", "--macro", "Macro.defineModule()"];
 		var i = 0;
+
+		@:coroutine
 		function test() {
 			// Was failing with nightlies (HxbFailure)
-			runHaxe(args, () -> {
-				assertSuccess();
-				assertHasPrint("Bar.test() = " + i);
-				if (++i >= 5) async.done();
-				else test();
-			});
+			runHaxe(args);
+			assertSuccess();
+			assertHasPrint("Bar.test() = " + i);
+			if (++i >= 5) async.done();
+			else test();
 		}
-		test();
+		hxcoro.CoroRun.run(test);
 	}
 
 	@:async
@@ -98,16 +100,17 @@ class Issue12001 extends TestCase {
 		vfs.putContent("Empty.hx", getTemplate("Empty.hx"));
 		var args = ["-main", "Empty", "--interp", "--macro", "Macro.hookRedefine()"];
 		var i = 0;
+
+		@:coroutine
 		function test() {
-			runHaxe(args, () -> {
-				assertSuccess();
-				// Newest version is being included
-				assertHasPrint("Baz.test() = " + i);
-				if (++i >= 5) async.done();
-				else test();
-			});
+			runHaxe(args);
+			assertSuccess();
+			// Newest version is being included
+			assertHasPrint("Baz.test() = " + i);
+			if (++i >= 5) async.done();
+			else test();
 		}
-		test();
+		hxcoro.CoroRun.run(test);
 	}
 
 	function testInvalidateError(_) {

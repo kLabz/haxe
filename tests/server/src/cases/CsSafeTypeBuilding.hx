@@ -25,7 +25,8 @@ class CsSafeTypeBuilding extends TestCase {
 		vfs.putContent("Macro.macro.hx", getTemplate("csSafeTypeBuilding/Macro.macro.hx"));
 		vfs.putContent("Main.hx", getTemplate("csSafeTypeBuilding/Main.hx"));
 
-		runHaxeJson(["--cwd", TestCase.rootCwd, "--cwd", testDir], Methods.ResetCache, {}, () -> {
+		hxcoro.CoroRun.run(() -> {
+			runHaxeJson(["--cwd", TestCase.rootCwd, "--cwd", testDir], Methods.ResetCache, {});
 			async.done();
 		});
 	}
