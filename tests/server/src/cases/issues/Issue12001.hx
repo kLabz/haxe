@@ -30,6 +30,7 @@ class Issue12001 extends TestCase {
 
 	@:async
 	@:timeout(3000)
+	@:coroutine
 	function testRedefineType(async:Async) {
 		vfs.putContent("Macro.hx", getTemplate("issues/Issue12001/Macro.hx"));
 		vfs.putContent("Main.hx", getTemplate("issues/Issue12001/Main.hx"));
@@ -45,7 +46,8 @@ class Issue12001 extends TestCase {
 			if (++i >= 5) async.done();
 			else test();
 		}
-		hxcoro.CoroRun.run(test);
+		
+		test();
 	}
 
 	function testDefineModule(_) {
@@ -75,6 +77,7 @@ class Issue12001 extends TestCase {
 
 	@:async
 	@:timeout(3000)
+	@:coroutine
 	function testRedefineModule(async:Async) {
 		vfs.putContent("Macro.hx", getTemplate("issues/Issue12001/Macro.hx"));
 		vfs.putContent("Main.hx", getTemplate("issues/Issue12001/Main1.hx"));
@@ -90,11 +93,13 @@ class Issue12001 extends TestCase {
 			if (++i >= 5) async.done();
 			else test();
 		}
-		hxcoro.CoroRun.run(test);
+		
+		test();
 	}
 
 	@:async
 	@:timeout(3000)
+	@:coroutine
 	function testRedefineAfterTyping(async:Async) {
 		vfs.putContent("Macro.hx", getTemplate("issues/Issue12001/Macro.hx"));
 		vfs.putContent("Empty.hx", getTemplate("Empty.hx"));
@@ -110,7 +115,8 @@ class Issue12001 extends TestCase {
 			if (++i >= 5) async.done();
 			else test();
 		}
-		hxcoro.CoroRun.run(test);
+		
+		test();
 	}
 
 	function testInvalidateError(_) {

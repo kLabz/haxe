@@ -77,10 +77,14 @@ class TestCase implements ITest implements ITestCase {
 	public function setup(async:utest.Async) {
 		testDir = "test/cases/" + i++;
 		vfs = new Vfs(testDir);
-		hxcoro.CoroRun.run(() -> {
-			runHaxeJson(["--cwd", rootCwd, "--cwd", testDir], Methods.ResetCache, {});
-			async.done();
-		});
+
+		utest
+			.CoroutineHelpers
+			.promise(() -> {
+				runHaxeJson(["--cwd", rootCwd, "--cwd", testDir], Methods.ResetCache, {});
+
+				async.done();
+			});
 	}
 
 	public function teardown() {}
