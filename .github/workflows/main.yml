@@ -83,7 +83,7 @@ jobs:
             $ErrorActionPreference = 'Stop'
             # see: https://github.com/aantron/luv/issues/162
             $env:PATH="${env:CYG_ROOT}\bin;${env:CYG_ROOT}\usr\x86_64-w64-mingw32\bin;${env:PATH}"
-            opam install haxe --deps-only
+            opam install haxe --deps-only --locked
             opam list
 
       - name: Set ADD_REVISION=1 for non-release
@@ -127,7 +127,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.opam/
-          key: ${{ runner.os }}-${{ env.OCAML_VERSION }}-${{ hashFiles('./haxe.opam', './libs/') }}-1
+          key: ${{ runner.os }}-${{ env.OCAML_VERSION }}-${{ hashFiles('./haxe.opam.locked.locked', './libs/') }}-1
 
       - name: Install Neko from S3
         run: |
@@ -164,7 +164,7 @@ jobs:
           opam init -c ${{ env.OCAML_VERSION }}
           opam update
           opam pin add haxe . --no-action
-          opam install haxe --deps-only --assume-depexts
+          opam install haxe --deps-only --assume-depexts --locked
           opam list
           ocamlopt -v
 
@@ -394,7 +394,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.opam/
-          key: arm-${{ runner.os }}-${{ env.OCAML_VERSION }}-${{ hashFiles('./haxe.opam', './libs/') }}-1
+          key: arm-${{ runner.os }}-${{ env.OCAML_VERSION }}-${{ hashFiles('./haxe.opam.locked', './libs/') }}-1
 
       - name: Install Neko from S3
         run: |
@@ -428,7 +428,7 @@ jobs:
           set -ex
           opam init -c ${{ env.OCAML_VERSION }}
           opam pin add haxe . --no-action
-          opam install haxe --deps-only --assume-depexts
+          opam install haxe --deps-only --assume-depexts --locked
           opam list
           ocamlopt -v
 
@@ -556,7 +556,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.opam/
-          key: macos-${{ matrix.arch }}-${{ env.OCAML_VERSION }}-${{ hashFiles('./haxe.opam', './libs/') }}-1
+          key: macos-${{ matrix.arch }}-${{ env.OCAML_VERSION }}-${{ hashFiles('./haxe.opam.locked', './libs/') }}-1
 
       - name: Install Neko from S3
         run: |
@@ -626,7 +626,7 @@ jobs:
           eval $(opam env)
           opam env
           opam pin add haxe . --no-action
-          opam install haxe --deps-only --assume-depexts
+          opam install haxe --deps-only --assume-depexts --locked
           opam list
           ocamlopt -v
 

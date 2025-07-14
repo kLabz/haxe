@@ -47,7 +47,7 @@
     eval $(opam env)
     opam env
     opam pin add haxe . --no-action
-    opam install haxe --deps-only --assume-depexts
+    opam install haxe --deps-only --assume-depexts --locked
     opam list
     ocamlopt -v
 

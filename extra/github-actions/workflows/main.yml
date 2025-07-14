@@ -45,7 +45,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.opam/
-          key: ${{ runner.os }}-${{ env.OCAML_VERSION }}-${{ hashFiles('./haxe.opam', './libs/') }}-1
+          key: ${{ runner.os }}-${{ env.OCAML_VERSION }}-${{ hashFiles('./haxe.opam.locked.locked', './libs/') }}-1
 
       @import install-neko-unix.yml
 
@@ -64,7 +64,7 @@ jobs:
           opam init -c ${{ env.OCAML_VERSION }}
           opam update
           opam pin add haxe . --no-action
-          opam install haxe --deps-only --assume-depexts
+          opam install haxe --deps-only --assume-depexts --locked
           opam list
           ocamlopt -v
 
@@ -258,7 +258,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.opam/
-          key: arm-${{ runner.os }}-${{ env.OCAML_VERSION }}-${{ hashFiles('./haxe.opam', './libs/') }}-1
+          key: arm-${{ runner.os }}-${{ env.OCAML_VERSION }}-${{ hashFiles('./haxe.opam.locked', './libs/') }}-1
 
       @import install-neko-unix.yml
 
@@ -274,7 +274,7 @@ jobs:
           set -ex
           opam init -c ${{ env.OCAML_VERSION }}
           opam pin add haxe . --no-action
-          opam install haxe --deps-only --assume-depexts
+          opam install haxe --deps-only --assume-depexts --locked
           opam list
           ocamlopt -v
 
@@ -384,7 +384,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.opam/
-          key: macos-${{ matrix.arch }}-${{ env.OCAML_VERSION }}-${{ hashFiles('./haxe.opam', './libs/') }}-1
+          key: macos-${{ matrix.arch }}-${{ env.OCAML_VERSION }}-${{ hashFiles('./haxe.opam.locked', './libs/') }}-1
 
       @import install-neko-unix.yml
       @import build-mac.yml
