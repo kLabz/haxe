@@ -45,7 +45,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.opam/
-          key: ${{ runner.os }}-${{ env.OCAML_VERSION }}-${{ hashFiles('./haxe.opam.locked.locked', './libs/') }}-1
+          key: ${{ runner.os }}-${{ env.OCAML_VERSION }}-${{ hashFiles('./haxe.opam.locked', './libs/') }}-1
 
       @import install-neko-unix.yml
 
