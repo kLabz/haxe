@@ -43,7 +43,7 @@ depends: [
   "luv" {= "0.5.14"}
   "macaddr" {= "5.6.0"}
   "multicore-magic" {= "2.3.1"}
-  "ocaml" {= "5.3.0"}
+  "ocaml" {= "5.4.0"}
   "ocaml-base-compiler" {= "5.3.0"}
   "ocaml-compiler" {= "5.3.0"}
   "ocaml-compiler-libs" {= "v0.17.0"}
