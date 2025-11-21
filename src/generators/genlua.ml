@@ -107,7 +107,7 @@ let s_escape_lua ?(dec=true) s =
 (* TODO: are all these kwds necessary for field quotes *and* id escapes? *)
 let kwds =
     let h = Hashtbl.create 0 in
-    List.iter (fun s -> Hashtbl.add h s ()) [
+    List.iter (fun s -> Hashtbl.replace h s ()) [
         "_G"; ""; "and"; "break"; "do"; "else"; "elseif";
         "end"; "false"; "for"; "function"; "if";
         "in"; "local"; "nil"; "not"; "or"; "repeat";

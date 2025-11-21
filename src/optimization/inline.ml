@@ -321,8 +321,8 @@ object(self)
 				i_default_value = None;
 			} in
 			i.i_subst.v_meta <- List.filter (fun (m,_,_) -> m <> Meta.This) v.v_meta;
-			Hashtbl.add locals v.v_id i;
-			Hashtbl.add locals i.i_subst.v_id i;
+			Hashtbl.replace locals v.v_id i;
+			Hashtbl.replace locals i.i_subst.v_id i;
 			i
 
 	method read v =
@@ -613,7 +613,7 @@ object(self)
 		in
 		let rec map_var map_type v =
 			if not (Hashtbl.mem vars v.v_id) then begin
-				Hashtbl.add vars v.v_id ();
+				Hashtbl.replace vars v.v_id ();
 				if not (self#read v).i_outside then begin
 					v.v_type <- map_type v.v_type;
 					match v.v_extra with

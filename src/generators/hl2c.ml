@@ -106,7 +106,7 @@ let keywords =
 	"inline";"restrict";"_restrict"
 	] in
 	let h = Hashtbl.create 0 in
-	List.iter (fun i -> Hashtbl.add h i ()) c_kwds;
+	List.iter (fun i -> Hashtbl.replace h i ()) c_kwds;
 	h
 
 let ident i = if (Hashtbl.mem keywords i) || (ExtString.String.starts_with i "__") then "_hx_" ^ i else i
@@ -230,8 +230,8 @@ let hash ctx sid =
 			if Hashtbl.mem ctx.hash_mem h then loop (Int32.add h Int32.one) else h
 		in
 		let h = loop (hl_hash ctx.hlcode.strings.(sid)) in
-		Hashtbl.add ctx.hash_cache sid h;
-		Hashtbl.add ctx.hash_mem h true;
+		Hashtbl.replace ctx.hash_cache sid h;
+		Hashtbl.replace ctx.hash_mem h true;
 		ctx.hash_cache_list <- sid :: ctx.hash_cache_list;
 		h
 	)
@@ -242,7 +242,7 @@ let type_name ctx t =
 let define ctx s =
 	if not (Hashtbl.mem ctx.hdefines s) then begin
 		ctx.defines <- s :: ctx.defines;
-		Hashtbl.add ctx.hdefines s ();
+		Hashtbl.replace ctx.hdefines s ();
 	end
 
 let rec define_type gctx ctx t =
@@ -341,7 +341,7 @@ let define_function gctx ctx fid =
 	let ft = gctx.ftable.(fid) in
 	let fid = if ft.fe_decl = None then -1 else fid in
 	if not (Hashtbl.mem ctx.defined_funs fid) then begin
-		Hashtbl.add ctx.defined_funs fid ();
+		Hashtbl.replace ctx.defined_funs fid ();
 		(match ft.fe_decl with
 		| None ->
 			define ctx "#include <hl/natives.h>"
@@ -411,7 +411,7 @@ let generate_reflection gctx ctx =
 		let nargs = List.length args in
 		let kargs = List.map type_kind args in
 		let kt = type_kind t in
-		let h = try Hashtbl.find funByArgs nargs with Not_found -> let h = Hashtbl.create 0 in Hashtbl.add funByArgs nargs h; h in
+		let h = try Hashtbl.find funByArgs nargs with Not_found -> let h = Hashtbl.create 0 in Hashtbl.replace funByArgs nargs h; h in
 		Hashtbl.replace h (kargs,kt) ()
 	in
 	Array.iter (fun f ->
@@ -556,7 +556,7 @@ let generate_function gctx ctx f =
 
 	let label p = sprintf "label$%s%d_%d" ctx.file_prefix ctx.fun_index p in
 	ctx.fun_index <- ctx.fun_index + 1;
-	Hashtbl.add ctx.defined_funs f.findex ();
+	Hashtbl.replace ctx.defined_funs f.findex ();
 	Array.iter (define_type gctx ctx) f.regs;
 	define_type gctx ctx f.ftype;
 
@@ -1209,7 +1209,7 @@ let make_types_idents htypes =
 		let dig = Digest.to_hex (Digest.bytes (Marshal.to_bytes d [Marshal.Closures])) in
 		let h = String.sub dig 0 7 in
 		let h = if Hashtbl.mem hashes h then dig else h in
-		Hashtbl.add hashes h ();
+		Hashtbl.replace hashes h ();
 		h
 	in
 	let rec desc_string d =
@@ -1242,7 +1242,7 @@ let make_global_names code gnames =
 			let str = code.strings.(vl.(0)) in
 			let v = valid_ident str in
 			Hashtbl.replace hstrings v (Hashtbl.mem hstrings v);
-			Hashtbl.add is_cstr g ();
+			Hashtbl.replace is_cstr g ();
 			gnames.(g) <- str
 		| _ -> ()
 	) code.constants;
@@ -1257,8 +1257,8 @@ let make_global_names code gnames =
 			if Hashtbl.mem gnames_used rid then loop id (k+1) else rid
 		in
 		let id = loop id 0 in
-		Hashtbl.add gnames_used id ();
-		Hashtbl.add gnames g id;
+		Hashtbl.replace gnames_used id ();
+		Hashtbl.replace gnames g id;
 	) gids;
 	Array.init (Array.length code.globals) (fun i -> Hashtbl.find gnames i)
 
@@ -1327,7 +1327,7 @@ let make_modules ctx all_types =
 				m_functions = [];
 				m_types = [];
 			} in
-			Hashtbl.add modules name m;
+			Hashtbl.replace modules name m;
 			all_modules := m :: !all_modules;
 			m
 	in
@@ -1593,7 +1593,7 @@ let write_c com file (code:code) gnames num_domains =
 	let is_const = Hashtbl.create 0 in
 	Array.iter (fun (g,fields) ->
 		sexpr "%s = &const_%s" gnames.(g) gnames.(g);
-		Hashtbl.add is_const g true;
+		Hashtbl.replace is_const g true;
 	) code.constants;
 	unblock ctx;
 	line "}";

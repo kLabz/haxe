@@ -446,7 +446,7 @@ let create_field_closure gctx jc path_this jm name jsig t =
 	let context = ["this",jsig_this] in
 	let wf = create_typed_function gctx (FuncMember(path_this,name)) jc jm context in
 	let jc_closure = wf#get_class in
-	Hashtbl.add gctx.closure_paths (path_this,name,jsig) jc_closure#get_this_path;
+	Hashtbl.replace gctx.closure_paths (path_this,name,jsig) jc_closure#get_this_path;
 	Mutex.unlock gctx.mutexes.closure_lookup;
 	begin match t with
 	| None ->
@@ -554,7 +554,7 @@ class texpr_to_jvm
 
 	method add_local2 id name jsig init_state =
 		let slot,load,store = jm#add_local name jsig init_state in
-		Hashtbl.add local_lookup id (slot,load,store);
+		Hashtbl.replace local_lookup id (slot,load,store);
 		slot,load,store
 
 	method add_local v init_state =
@@ -741,7 +741,7 @@ class texpr_to_jvm
 		with Not_found ->
 			let wf = create_typed_function gctx (FuncStatic(path,name)) jc jm [] in
 			let jc_closure = wf#get_class in
-			Hashtbl.add gctx.closure_paths (path,name,jsig) jc_closure#get_this_path;
+			Hashtbl.replace gctx.closure_paths (path,name,jsig) jc_closure#get_this_path;
 			Mutex.unlock gctx.mutexes.closure_lookup;
 			associate_functional_interfaces gctx wf t;
 			ignore(wf#generate_constructor false);
@@ -2248,7 +2248,7 @@ class texpr_to_jvm
 								save();
 								load
 							in
-							Hashtbl.add lut name load;
+							Hashtbl.replace lut name load;
 							loop fl;
 						| [] ->
 							()

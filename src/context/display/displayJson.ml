@@ -490,7 +490,7 @@ let handler =
 			);
 		);
 	] in
-	List.iter (fun (s,f) -> Hashtbl.add h s f) l;
+	List.iter (fun (s,f) -> Hashtbl.replace h s f) l;
 	h
 
 let parse_input com input =

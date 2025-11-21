@@ -69,7 +69,7 @@ module Ssa = struct
 					w := List.tl !w;
 					List.iter (fun y ->
 						if not (Hashtbl.mem done_list y.bb_id) then begin
-							Hashtbl.add done_list y.bb_id true;
+							Hashtbl.replace done_list y.bb_id true;
 							if in_scope y vi.vi_bb_declare then begin
 								add_phi ctx.graph y v;
 								if not (List.memq y vi.vi_writes) then

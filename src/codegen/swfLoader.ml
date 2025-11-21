@@ -234,7 +234,7 @@ let build_class com c file =
 			end;
 			cf :: acc
 		| HFMethod m when m.hlm_override ->
-			Hashtbl.add override (name,stat) ();
+			Hashtbl.replace override (name,stat) ();
 			acc
 		| HFMethod m ->
 			(match m.hlm_kind with
@@ -300,10 +300,10 @@ let build_class com c file =
 				cf.cff_kind <- FFun f;
 				cf :: acc
 			| MK3Getter ->
-				Hashtbl.add getters (name,stat) (m.hlm_type.hlmt_ret,mk_meta());
+				Hashtbl.replace getters (name,stat) (m.hlm_type.hlmt_ret,mk_meta());
 				acc
 			| MK3Setter ->
-				Hashtbl.add setters (name,stat) ((match m.hlm_type.hlmt_args with [t] -> t | _ -> die "" __LOC__),mk_meta());
+				Hashtbl.replace setters (name,stat) ((match m.hlm_type.hlmt_args with [t] -> t | _ -> die "" __LOC__),mk_meta());
 				acc
 			)
 		| _ -> acc
@@ -464,7 +464,7 @@ let extract_data (_,tags) =
 			(match path with
 			| { tpackage = []; tname = "Float" | "Bool" | "Int" | "UInt" | "Dynamic" } -> ()
 			| { tpackage = _; tname = "MethodClosure" } -> ()
-			| _ -> Hashtbl.add h (path.tpackage,path.tname) c)
+			| _ -> Hashtbl.replace h (path.tpackage,path.tname) c)
 		| _ -> ()
 	in
 	List.iter (fun t ->
@@ -505,7 +505,7 @@ let remove_debug_infos as3 =
 			Hashtbl.find methods m.hlmt_index
 		with Not_found ->
 			let m2 = { m with hlmt_debug_name = None; hlmt_pnames = None } in
-			Hashtbl.add methods m.hlmt_index m2;
+			Hashtbl.replace methods m.hlmt_index m2;
 			m2.hlmt_function <- (match m.hlmt_function with None -> None | Some f -> Some (loop_function f));
 			m2
 	and loop_function f =
@@ -624,7 +624,7 @@ class swf_library com name file_path = object(self)
 		with Not_found -> try
 			let c = Hashtbl.find (self#extract) path in
 			let c = build_class com c file_path in
-			Hashtbl.add haxe_classes path c;
+			Hashtbl.replace haxe_classes path c;
 			Some c
 		with Not_found ->
 			None
@@ -643,7 +643,7 @@ let remove_classes toremove lib l =
 	| [] -> lib
 	| _ ->
 		let hcl = Hashtbl.create 0 in
-		List.iter (fun path -> Hashtbl.add hcl path ()) l;
+		List.iter (fun path -> Hashtbl.replace hcl path ()) l;
 		match List.filter (fun c -> Hashtbl.mem hcl c) (!toremove) with
 		| [] -> lib
 		| classes ->

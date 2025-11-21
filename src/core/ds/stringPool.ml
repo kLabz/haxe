@@ -15,7 +15,7 @@ let create () = {
 let add sp s =
 	assert (not sp.closed);
 	let index = StringDynArray.length sp.items in
-	StringHashtbl.add sp.lut s index;
+	StringHashtbl.replace sp.lut s index;
 	StringDynArray.add sp.items s;
 	index
 

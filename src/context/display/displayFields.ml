@@ -155,7 +155,7 @@ let collect ctx e_ast e dk with_type p =
 		else if should_access c cf stat then
 			true
 		else begin
-			Hashtbl.add blocked_items cf.cf_name ();
+			Hashtbl.replace blocked_items cf.cf_name ();
 			false
 		end
 	in

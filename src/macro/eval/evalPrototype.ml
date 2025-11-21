@@ -334,7 +334,7 @@ let add_types ctx types ready =
 			let rec loop p f =
 				match p with
 				| Some (p,_) when PMap.mem f.cf_name p.cl_fields || loop p.cl_super f ->
-					Hashtbl.add ctx.overrides (p.cl_path,f.cf_name) true;
+					Hashtbl.replace ctx.overrides (p.cl_path,f.cf_name) true;
 					true
 				| _ ->
 					false

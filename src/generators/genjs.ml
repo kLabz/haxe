@@ -91,13 +91,13 @@ let setup_kwds com =
 	Hashtbl.reset kwds;
 	let es_version = Gctx.get_es_version com.defines in
 	let lst = if es_version >= 5 then es5kwds else es3kwds in
-	List.iter (fun s -> Hashtbl.add kwds s ()) lst
+	List.iter (fun s -> Hashtbl.replace kwds s ()) lst
 
 (* Identifiers Haxe reserves to make the JS output cleaner. These can still be used in untyped code (TLocal),
    but are escaped upon declaration. *)
 let kwds2 =
 	let h = Hashtbl.create 0 in
-	List.iter (fun s -> Hashtbl.add h s ()) [
+	List.iter (fun s -> Hashtbl.replace h s ()) [
 		(* https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects *)
 		"Infinity"; "NaN"; "decodeURI"; "decodeURIComponent"; "encodeURI"; "encodeURIComponent";
 		"escape"; "eval"; "isFinite"; "isNaN"; "parseFloat"; "parseInt"; "undefined"; "unescape";
@@ -1013,7 +1013,7 @@ let generate_package_create ctx (p,_) =
 		| [] -> ()
 		| p :: l when Hashtbl.mem ctx.packages (p :: acc) -> loop (p :: acc) l
 		| p :: l ->
-			Hashtbl.add ctx.packages (p :: acc) ();
+			Hashtbl.replace ctx.packages (p :: acc) ();
 			(match acc with
 			| [] ->
 				if ctx.js_modern then
@@ -1719,7 +1719,7 @@ let generate js_gen com =
 					let path = match pre with "" -> f | pre -> (pre ^ "." ^ f) in
 					if not (Hashtbl.mem exportMap path) then (
 						let elts = { os_name = f; os_fields = [] } in
-						Hashtbl.add exportMap path elts;
+						Hashtbl.replace exportMap path elts;
 						let cobject = match pre with "" -> exposedObject | pre -> Hashtbl.find exportMap pre in
 						cobject.os_fields <- elts :: cobject.os_fields
 					);

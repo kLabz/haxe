@@ -960,7 +960,7 @@ module Converter = struct
 					in
 					let key = (jf.jf_name,sig_key) in
 					if not (Hashtbl.mem known_sigs key) then begin
-						Hashtbl.add known_sigs key jf;
+						Hashtbl.replace known_sigs key jf;
 						DynArray.add fields (convert_field ctx true jc is_interface jf p)
 					end
 				end
@@ -968,7 +968,7 @@ module Converter = struct
 			List.iter (fun jf ->
 				if should_generate jf then begin
 					if not (Hashtbl.mem known_names jf.jf_name) then begin
-						Hashtbl.add known_names jf.jf_name jf;
+						Hashtbl.replace known_names jf.jf_name jf;
 						DynArray.add fields (convert_field ctx false jc is_interface jf p)
 					end
 				end
@@ -1045,7 +1045,7 @@ class java_library_modern com  name file_path = object(self)
 							tname
 						| Some mname -> mname
 					in
-					Hashtbl.add modules (pack,mname) (filename,entry);
+					Hashtbl.replace modules (pack,mname) (filename,entry);
 				end
 		| _ -> ()
 	) (Zip.entries (Lazy.force zip));

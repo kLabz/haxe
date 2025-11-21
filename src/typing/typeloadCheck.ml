@@ -620,7 +620,7 @@ let check_final_vars ctx e =
 	let rec loop c =
 		List.iter (fun cf -> match cf.cf_kind with
 			| Var _ when (has_class_field_flag cf CfFinal) && cf.cf_expr = None && not (Hashtbl.mem final_vars cf.cf_name) ->
-				Hashtbl.add final_vars cf.cf_name false;
+				Hashtbl.replace final_vars cf.cf_name false;
 				DynArray.add ordered_fields (c,cf)
 			| _ ->
 				()

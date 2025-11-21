@@ -370,7 +370,7 @@ module ValueCompletion = struct
 		let acc = Hashtbl.create 0 in
 		let add key kind =
 			if not (Hashtbl.mem acc key) then
-				Hashtbl.add acc key (key,kind,None)
+				Hashtbl.replace acc key (key,kind,None)
 		in
 		(* 0. Extra locals *)
 		IntMap.iter (fun key _ -> add key "variable") env.env_extra_locals;
@@ -680,7 +680,7 @@ let handler =
 				let key_type = String.sub name 0 i in
 				let key_field = String.sub name (i + 1) (String.length name - i - 1) in
 				let bp = make_function_breakpoint BPEnabled in
-				Hashtbl.add hctx.ctx.debug.function_breakpoints (hash key_type,hash key_field) bp;
+				Hashtbl.replace hctx.ctx.debug.function_breakpoints (hash key_type,hash key_field) bp;
 				JObject ["id",JInt bp.fbpid]
 			) bps in
 			JArray bps
@@ -774,7 +774,7 @@ let handler =
 				hctx.send_error "No completion point found";
 		);
 	] in
-	List.iter (fun (s,f) -> Hashtbl.add h s f) l;
+	List.iter (fun (s,f) -> Hashtbl.replace h s f) l;
 	h
 
 let make_connection socket =

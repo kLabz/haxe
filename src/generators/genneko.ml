@@ -67,7 +67,7 @@ let pos ctx p =
 
 					with Not_found -> p.pfile
 				) in
-				Hashtbl.add files p.pfile path;
+				Hashtbl.replace files p.pfile path;
 				path
 	) in
 	{
@@ -84,7 +84,7 @@ let gen_global_name ctx path =
 	with Not_found ->
 		let name = "@G" ^ string_of_int ctx.curglobal in
 		ctx.curglobal <- ctx.curglobal + 1;
-		Hashtbl.add ctx.globals path name;
+		Hashtbl.replace ctx.globals path name;
 		name
 
 let null p =
@@ -588,7 +588,7 @@ let gen_package ctx t =
 			if not (Hashtbl.mem ctx.packages path) then begin
 				let p = pos ctx (t_infos t).mt_pos in
 				let e = (EBinop ("=",gen_type_path p (acc,x),call p (builtin p "new") [null p]),p) in
-				Hashtbl.add ctx.packages path ();
+				Hashtbl.replace ctx.packages path ();
 				(match acc with
 				| [] ->
 					let reg = (EBinop ("=",field p (ident p "@classes") x,ident p x),p) in

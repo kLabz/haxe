@@ -124,7 +124,7 @@ class typed_functions = object(self)
 			next = None;
 		} in
 		if meth.arity > max_arity then max_arity <- meth.arity;
-		Hashtbl.add signatures (meth.cargs,meth.cret) meth;
+		Hashtbl.replace signatures (meth.cargs,meth.cret) meth;
 		meth
 
 	method make_forward_method_jsig
@@ -376,7 +376,7 @@ class typed_function
 		let add_interface path params =
 			if not (Hashtbl.mem implemented_interfaces path) then begin
 				jc_closure#add_interface path params;
-				Hashtbl.add implemented_interfaces path true;
+				Hashtbl.replace implemented_interfaces path true;
 			end
 		in
 		let spawn_invoke_next name msig is_bridge =

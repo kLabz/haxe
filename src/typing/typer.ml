@@ -1051,7 +1051,7 @@ and type_map_declaration ctx e1 el with_type p =
 			] e_key.epos);
 		with Not_found ->
 			begin match e_key.eexpr with
-			| TConst _ -> Hashtbl.add keys e_key.eexpr e_key.epos;
+			| TConst _ -> Hashtbl.replace keys e_key.eexpr e_key.epos;
 			| _ -> ()
 			end
 	in

@@ -237,7 +237,7 @@ let parse_args com =
 				| _ -> failwith ("Resource '" ^ file ^ "' excess the maximum size of 12MB")
 			) in
 			if Hashtbl.mem com.resources name then failwith ("Duplicate resource name " ^ name);
-			Hashtbl.add com.resources name data
+			Hashtbl.replace com.resources name data
 		),"<file>[@name]","add a named resource file");
 		("Debug",["--prompt"],["-prompt"], Arg.Unit (fun() -> Helper.prompt := true),"","prompt on error");
 		("Compilation",["--cmd"],["-cmd"], Arg.String (fun cmd ->

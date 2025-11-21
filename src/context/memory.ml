@@ -36,7 +36,7 @@ let rec scan_module_deps cs m h =
 	if Hashtbl.mem h m.m_id then
 		()
 	else begin
-		Hashtbl.add h m.m_id m;
+		Hashtbl.replace h m.m_id m;
 		PMap.iter (fun _ mdep ->
 			let m = (cs#get_context mdep.md_sign)#find_module mdep.md_path in
 			scan_module_deps cs m h

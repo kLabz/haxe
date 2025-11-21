@@ -2331,7 +2331,7 @@ let realize_required_accessors ctx cl =
 								let write = if write = AccNever then write' else true in
 								Hashtbl.replace h cf.cf_name (read, write, native)
 							with Not_found ->
-								Hashtbl.add h cf.cf_name (read = AccCall, write = AccCall, if is_flash_property cf then Some ci else None)
+								Hashtbl.replace h cf.cf_name (read = AccCall, write = AccCall, if is_flash_property cf then Some ci else None)
 							end
 						| _ -> ()
 					) ci.cl_ordered_fields;

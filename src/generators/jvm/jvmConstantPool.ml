@@ -66,8 +66,8 @@ class constant_pool = object(self)
 			let i = next_index in
 			next_index <- next_index + 1;
 			DynArray.add pool const;
-			Hashtbl.add lut const i;
-			Hashtbl.add luti i (DynArray.length pool - 1);
+			Hashtbl.replace lut const i;
+			Hashtbl.replace luti i (DynArray.length pool - 1);
 			match const with
 			| ConstDouble _ | ConstLong _ ->
 				next_index <- next_index + 1;

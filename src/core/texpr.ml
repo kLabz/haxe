@@ -320,7 +320,7 @@ let duplicate_tvars f_this e =
 		v2.v_meta <- v.v_meta;
 		v2.v_extra <- v.v_extra;
 		v2.v_flags <- v.v_flags;
-		Hashtbl.add vars v.v_id v2;
+		Hashtbl.replace vars v.v_id v2;
 		v2;
 	in
 	let rec build_expr e =
@@ -676,7 +676,7 @@ let build_metadata api t =
 		let h = Hashtbl.create 0 in
 		mk (TObjectDecl (List.map (fun (f,el,p) ->
 			if Hashtbl.mem h f then raise_typing_error ("Duplicate metadata '" ^ f ^ "'") p;
-			Hashtbl.add h f ();
+			Hashtbl.replace h f ();
 			(f,null_pos,NoQuotes), mk (match el with [] -> TConst TNull | _ -> TArrayDecl (List.map (type_constant_value api) el)) (api.tarray t_dynamic) p
 		) ml)) t_dynamic p
 	in
@@ -803,10 +803,10 @@ let collect_captured_vars e =
 	let known = Hashtbl.create 0 in
 	let unknown = ref [] in
 	let accesses_this = ref false in
-	let declare v = Hashtbl.add known v.v_id () in
+	let declare v = Hashtbl.replace known v.v_id () in
 	let rec loop e = match e.eexpr with
 		| TLocal v when has_var_flag v VCaptured &&  not (Hashtbl.mem known v.v_id) ->
-			Hashtbl.add known v.v_id ();
+			Hashtbl.replace known v.v_id ();
 			unknown := v :: !unknown
 		| TConst (TThis | TSuper) ->
 			accesses_this := true;

@@ -534,7 +534,7 @@ let generate swf_header swf_libs flash_version com =
 		let _, tags = swf_lib#get_data in
 		List.iter (fun t ->
 			match t.tdata with
-			| TExport l -> List.iter (fun e -> Hashtbl.add exports e.exp_name ()) l
+			| TExport l -> List.iter (fun e -> Hashtbl.replace exports e.exp_name ()) l
 			| TF9Classes el ->
 				List.iter (fun e ->
 					if e.f9_cid <> None then List.iter (fun t ->

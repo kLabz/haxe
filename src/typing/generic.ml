@@ -116,7 +116,7 @@ let generic_substitute_expr gctx e =
 		with Not_found ->
 			let v2 = alloc_var v.v_kind v.v_name (generic_substitute_type gctx v.v_type) v.v_pos in
 			v2.v_meta <- v.v_meta;
-			Hashtbl.add vars v.v_id v2;
+			Hashtbl.replace vars v.v_id v2;
 			v2
 	in
 	let rec build_expr e =

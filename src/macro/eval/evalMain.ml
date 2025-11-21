@@ -98,7 +98,7 @@ let create com api is_macro =
 	} in
 	let eval = EvalThread.create_eval thread in
 	let evals = ThreadSafeHashtbl.create 1 in
-	ThreadSafeHashtbl.add evals 0 eval;
+	ThreadSafeHashtbl.replace evals 0 eval;
 	let ctx = {
 		ctx_id = !GlobalState.sid;
 		is_macro = is_macro;
@@ -203,7 +203,7 @@ let value_signature v =
 			addc 'R';
 			add (string_of_int i)
 		with Not_found ->
-			Hashtbl.add scache s (Hashtbl.length scache);
+			Hashtbl.replace scache s (Hashtbl.length scache);
 			addc 'y';
 			let s = EvalStdLib.StdStringTools.url_encode s in
 			add (string_of_int (String.length s));
@@ -219,7 +219,7 @@ let value_signature v =
 			add (string_of_int i)
 		with Not_found ->
 			let i = !cache_length in
-			ValueHashtbl.add cache v i;
+			ValueHashtbl.replace cache v i;
 			incr cache_length;
 			f()
 	in

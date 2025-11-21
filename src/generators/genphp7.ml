@@ -189,7 +189,7 @@ let php_keywords_list =
 
 let php_keywords_tbl = begin
 	let tbl = Hashtbl.create 100 in
-	List.iter (fun kwd -> Hashtbl.add tbl kwd ()) php_keywords_list;
+	List.iter (fun kwd -> Hashtbl.replace tbl kwd ()) php_keywords_list;
 	tbl
 end
 
@@ -1084,7 +1084,7 @@ let get_stored_wrapper tbl wrap key : type_wrapper =
 		wrapper
 	with Not_found ->
 		let wrapper = wrap key in
-		Hashtbl.add tbl key wrapper;
+		Hashtbl.replace tbl key wrapper;
 		wrapper
 
 (**
@@ -1141,7 +1141,7 @@ let type_name_used_in_namespace ctx type_path as_name namespace =
 				List.iter
 					(fun ctx_type ->
 						let wrapper = get_wrapper ctx_type in
-						Hashtbl.add ctx.pgc_namespaces_types_cache wrapper#get_namespace (StringHelper.uppercase wrapper#get_name)
+						Hashtbl.replace ctx.pgc_namespaces_types_cache wrapper#get_namespace (StringHelper.uppercase wrapper#get_name)
 					)
 					ctx.pgc_common.types;
 				Hashtbl.find_all ctx.pgc_namespaces_types_cache namespace
@@ -1370,7 +1370,7 @@ class code_writer (ctx:php_generator_context) hx_type_path php_name =
 										prepend_alias (get_alias_next_part ());
 							with
 								| Not_found ->
-									Hashtbl.add use_table !alias_upper { ut_alias = !alias; ut_type_path = type_path; };
+									Hashtbl.replace use_table !alias_upper { ut_alias = !alias; ut_type_path = type_path; };
 									added := true
 								| _ -> fail self#pos __LOC__
 						done;

@@ -25,7 +25,7 @@ let collect_statistics com pos_filters with_expressions =
 				Hashtbl.find paths path
 			with Not_found ->
 				let unique = com.file_keys#get path in
-				Hashtbl.add paths path unique;
+				Hashtbl.replace paths path unique;
 				unique
 		)
 	in
@@ -43,11 +43,11 @@ let collect_statistics com pos_filters with_expressions =
 			if not (List.mem r l) then
 				Hashtbl.replace relations p (r :: l)
 		with Not_found ->
-			Hashtbl.add relations p [r]
+			Hashtbl.replace relations p [r]
 	in
 	let declare kind p =
 		if check_pos p then begin
-			if not (Hashtbl.mem relations p) then Hashtbl.add relations p [];
+			if not (Hashtbl.mem relations p) then Hashtbl.replace relations p [];
 			Hashtbl.replace symbols p kind;
 		end
 	in
@@ -70,7 +70,7 @@ let collect_statistics com pos_filters with_expressions =
 		let memo = Hashtbl.create 0 in
 		let rec loop c1 =
 			if not (Hashtbl.mem memo c1.cl_path) then begin
-				Hashtbl.add memo c1.cl_path true;
+				Hashtbl.replace memo c1.cl_path true;
 				if (has_class_flag c1 CInterface) then
 					add_relation c.cl_name_pos (Extended,c1.cl_name_pos)
 				else begin
@@ -134,7 +134,7 @@ let collect_statistics com pos_filters with_expressions =
 					Option.may f c.cl_super
 				in
 				loop c;
-				Hashtbl.add related_fields id !cfl
+				Hashtbl.replace related_fields id !cfl
 			end
 		| None ->
 			()
@@ -186,7 +186,7 @@ let collect_statistics com pos_filters with_expressions =
 	in
 	let check_module m =
 		if not (Hashtbl.mem handled_modules m.m_path) then begin
-			Hashtbl.add handled_modules m.m_path true;
+			Hashtbl.replace handled_modules m.m_path true;
 			List.iter (fun (p1,p2) ->
 				add_relation p1 (Referenced,p2)
 			) m.m_extra.m_display.m_inline_calls;
@@ -334,7 +334,7 @@ module Printer = struct
 			try
 				Hashtbl.replace files file ((p,rl) :: Hashtbl.find files file)
 			with Not_found ->
-				Hashtbl.add files file [p,rl]
+				Hashtbl.replace files file [p,rl]
 		) relations;
 		let ja = Hashtbl.fold (fun file relations acc ->
 			let l = List.map (fun (p,rl) ->
@@ -346,7 +346,7 @@ module Printer = struct
 						"file",JString (Path.get_real_path p.pfile);
 					] in
 					try Hashtbl.replace h s (jo :: Hashtbl.find h s)
-					with Not_found -> Hashtbl.add h s [jo]
+					with Not_found -> Hashtbl.replace h s [jo]
 				) rl;
 				let l = Hashtbl.fold (fun s js acc -> (s,JArray js) :: acc) h [] in
 				let l = ("range",Genjson.generate_pos_as_range p) :: l in

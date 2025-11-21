@@ -23,7 +23,7 @@ let warn_deprecation dctx s p_usage =
 	let pkey p = (p.pfile,p.pmin) in
 	if not (Hashtbl.mem warned_positions (pkey p_usage)) then begin
 		let options = Warning.from_meta (dctx.class_meta @ dctx.field_meta) in
-		Hashtbl.add warned_positions (pkey p_usage) (s,p_usage,options);
+		Hashtbl.replace warned_positions (pkey p_usage) (s,p_usage,options);
 		module_warning dctx.com dctx.curmod WDeprecated options s p_usage;
 	end
 

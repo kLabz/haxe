@@ -795,7 +795,7 @@ and enum_class ctx e =
 						need_opt = false;
 					} in
 					ctx.m <- old;
-					Hashtbl.add ctx.defined_funs eid ();
+					Hashtbl.replace ctx.defined_funs eid ();
 					DynArray.add ctx.cfunctions hlf;
 					p.pbindings <- (fid, eid) :: p.pbindings
 				| t -> die "" __LOC__);
@@ -840,7 +840,7 @@ and alloc_std ctx name args ret =
 	(* different from :hlNative to prevent mismatch *)
 	let nid = lookup ctx.cnatives ("$" ^ name ^ "@" ^ lib, -1) (fun() ->
 		let fid = alloc_fun_path ctx ([],"std") name in
-		Hashtbl.add ctx.defined_funs fid ();
+		Hashtbl.replace ctx.defined_funs fid ();
 		(alloc_string ctx lib, alloc_string ctx name,HFun (args,ret),fid)
 	) in
 	let _,_,_,fid = DynArray.get ctx.cnatives.arr nid in
@@ -921,7 +921,7 @@ and alloc_var ctx v new_var =
 	with Not_found ->
 		let r = alloc_tmp ctx (to_type ctx v.v_type) in
 		hold ctx r;
-		Hashtbl.add ctx.m.mvars v.v_id r;
+		Hashtbl.replace ctx.m.mvars v.v_id r;
 		r
 
 
@@ -3495,7 +3495,7 @@ and make_fun ?gen_content ctx name fidx f cthis cparent =
 		need_opt = (gen_content = None || name <> ("",""));
 	} in
 	ctx.m <- old;
-	Hashtbl.add ctx.defined_funs fidx ();
+	Hashtbl.replace ctx.defined_funs fidx ();
 	DynArray.add ctx.cfunctions hlf;
 	capt
 
@@ -3509,7 +3509,7 @@ let generate_static ctx c f =
 		let add_native lib name =
 			let fid = alloc_fid ctx c f in
 			ignore(lookup ctx.cnatives (name ^ "@" ^ lib,fid) (fun() ->
-				Hashtbl.add ctx.defined_funs fid ();
+				Hashtbl.replace ctx.defined_funs fid ();
 				(alloc_string ctx lib, alloc_string ctx name,to_type ctx f.cf_type,fid)
 			));
 		in
@@ -4336,7 +4336,7 @@ let make_context_sign com =
 	List.iter (fun t ->
 		let mt = t_infos t in
 		let mid = mt.mt_module.m_id in
-		Hashtbl.add mhash mid true
+		Hashtbl.replace mhash mid true
 	) com.types;
 	let data = Marshal.to_string mhash [No_sharing] in
 	Digest.to_hex (Digest.string data)

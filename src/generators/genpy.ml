@@ -67,7 +67,7 @@ end
 module KeywordHandler = struct
 	let kwds =
 		let h = Hashtbl.create 0 in
-		List.iter (fun s -> Hashtbl.add h s ()) [
+		List.iter (fun s -> Hashtbl.replace h s ()) [
 			"and"; "as"; "assert"; "async"; "await"; "break"; "class"; "continue"; "def"; "del"; "elif"; "else"; "except"; "exec"; "finally"; "for";
 			"from"; "global"; "if"; "import"; "in"; "is"; "lambda"; "not"; "or"; "pass"; "raise"; "return"; "try"; "while";
 			"with"; "yield"; "None"; "True"; "False";
@@ -76,7 +76,7 @@ module KeywordHandler = struct
 
 	let kwds2 =
 		let h = Hashtbl.create 0 in
-		List.iter (fun s -> Hashtbl.add h s ()) [
+		List.iter (fun s -> Hashtbl.replace h s ()) [
 			"len"; "int"; "float"; "list"; "bool"; "str"; "isinstance"; "print"; "min"; "max";
 			"hasattr"; "getattr"; "setattr"; "delattr"; "callable"; "type"; "ord"; "chr"; "iter"; "map"; "filter";
 			"tuple"; "dict"; "set"; "bytes"; "bytearray"; "self";
@@ -279,7 +279,7 @@ module Transformer = struct
 					) catches;
 				| TBinop( (OpAssign | OpAssignOp(_)), { eexpr = TLocal v }, e2) ->
 					if not (PMap.mem v.v_id !cur) then
-						Hashtbl.add non_locals v.v_id v;
+						Hashtbl.replace non_locals v.v_id v;
 					maybe_continue e2;
 				| TFunction _ ->
 					()
@@ -2321,7 +2321,7 @@ module Generator = struct
 	let gen_types ctx =
 		let used_paths = Hashtbl.create 0 in
 		let find_type path =
-			Hashtbl.add used_paths path true;
+			Hashtbl.replace used_paths path true;
 			Utils.find_type ctx.com path
 		in
 		let need_anon_for_trace = (has_feature ctx "has_anon_trace") && (has_feature ctx "haxe.Log.trace") in
@@ -2357,7 +2357,7 @@ module Generator = struct
 				spr ctx "            return False\n"
 			end else
 				spr ctx "    pass";
-			Hashtbl.add used_paths ([],"_hx_AnonObject") true;
+			Hashtbl.replace used_paths ([],"_hx_AnonObject") true;
 		end;
 		if has_feature ctx "python._hx_classes" then begin
 			newline ctx;

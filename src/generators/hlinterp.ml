@@ -217,7 +217,7 @@ let alloc_obj ctx t =
 			dtypes = Array.map (fun (_,_,t) -> t) v.vfields;
 			dvirtuals = [];
 		} in
-		Array.iteri (fun i (n,_,_) -> Hashtbl.add o.dfields n i) v.vfields;
+		Array.iteri (fun i (n,_,_) -> Hashtbl.replace o.dfields n i) v.vfields;
 		let v = { vtype = v; vvalue = VDynObj o; vtable = o.dvalues; vindexes = Array.mapi (fun i _ -> VFIndex i) v.vfields } in
 		o.dvirtuals <- [v];
 		VVirtual v
@@ -296,7 +296,7 @@ let caml_to_hl str = StringHelper.utf8_to_utf16 str true
 
 let hash ctx str =
 	let h = hl_hash str in
-	if not (Hashtbl.mem ctx.cached_hashes h) then Hashtbl.add ctx.cached_hashes h (String.sub str 0 (try String.index str '\000' with _ -> String.length str));
+	if not (Hashtbl.mem ctx.cached_hashes h) then Hashtbl.replace ctx.cached_hashes h (String.sub str 0 (try String.index str '\000' with _ -> String.length str));
 	h
 
 let utf16_iter f s =
@@ -639,7 +639,7 @@ let rec dyn_set_field ctx obj field v vt =
 			end;
 		with Not_found ->
 			let idx = Array.length d.dvalues in
-			Hashtbl.add d.dfields field idx;
+			Hashtbl.replace d.dfields field idx;
 			let vals2 = Array.make (idx + 1) VNull in
 			let types2 = Array.make (idx + 1) HVoid in
 			Array.blit d.dvalues 0 vals2 0 idx;
@@ -677,7 +677,7 @@ let cached_string ctx idx =
 		Hashtbl.find ctx.cached_strings idx
 	with Not_found ->
 		let s = caml_to_hl ctx.code.strings.(idx) in
-		Hashtbl.add ctx.cached_strings idx s;
+		Hashtbl.replace ctx.cached_strings idx s;
 		s
 
 let virt_make_val v =
@@ -689,7 +689,7 @@ let virt_make_val v =
 		| VFNone -> ()
 		| VFIndex k ->
 			let n, _, t = v.vtype.vfields.(i) in
-			Hashtbl.add hfields n (DynArray.length values);
+			Hashtbl.replace hfields n (DynArray.length values);
 			DynArray.add values v.vtable.(k);
 			DynArray.add ftypes t;
 	) v.vindexes;
@@ -1721,7 +1721,7 @@ let load_native ctx lib name t =
 						Hashtbl.remove d.dfields f;
 						let fields = Hashtbl.fold (fun name i acc -> (name,if i < idx then i else i - 1) :: acc) d.dfields [] in
 						Hashtbl.clear d.dfields;
-						List.iter (fun (n,i) -> Hashtbl.add d.dfields n i) fields;
+						List.iter (fun (n,i) -> Hashtbl.replace d.dfields n i) fields;
 						let vals2 = Array.make (count - 1) VNull in
 						let types2 = Array.make (count - 1) HVoid in
 						let len = count - idx - 1 in
@@ -2553,7 +2553,7 @@ let check comerror code =
 	Array.iter (fun (lib,name,t,idx) ->
 		if idx >= Array.length ftypes then failwith ("Invalid native function index " ^ string_of_int idx ^ " for "^ code.strings.(lib) ^ "@" ^ code.strings.(name));
 		if ftypes.(idx) <> HVoid then failwith ("Duplicate native function bind " ^ string_of_int idx);
-		Hashtbl.add is_native_fun idx true;
+		Hashtbl.replace is_native_fun idx true;
 		ftypes.(idx) <- t
 	) code.natives;
 	(* TODO : check that no object type has a virtual native in his proto *)
@@ -2938,7 +2938,7 @@ let make_spec (code:code) (f:fundecl) =
 			| OAssert _  -> ()
 			| ONop _ -> ()
 		done;
-		Hashtbl.add block_args b.bstart args
+		Hashtbl.replace block_args b.bstart args
 	in
 	let all_blocks, _ = Hlopt.code_graph f in
 	let rec loop i =

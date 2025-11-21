@@ -22,7 +22,7 @@ let find_unused_variables com e =
 	let pmin_map = Hashtbl.create 0 in
 	let rec loop e = match e.eexpr with
 		| TVar({v_kind = VUser origin} as v,eo) when v.v_name <> "_" && not (has_var_flag v VUsedByTyper) ->
-			Hashtbl.add pmin_map e.epos.pmin v;
+			Hashtbl.replace pmin_map e.epos.pmin v;
 			let p,replacement = match eo with
 			| Some e1 when origin <> TVOPatternVariable ->
 				loop e1;
@@ -130,7 +130,7 @@ let collect_diagnostics dctx com =
 						let dead_blocks2 = List.filter (fun (p,_) -> List.mem_assoc p dead_blocks) dead_blocks2 in
 						Hashtbl.replace dctx.dead_blocks file_key dead_blocks2
 					with Not_found ->
-						Hashtbl.add dctx.dead_blocks file_key dead_blocks
+						Hashtbl.replace dctx.dead_blocks file_key dead_blocks
 				end
 			) cc#get_files
 		| None ->

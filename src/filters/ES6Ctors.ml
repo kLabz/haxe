@@ -96,17 +96,17 @@ let rewrite_ctors com =
 						Option.may (fun ctor ->
 							(* if parent's constructor receives less arguments than needed for this - we need to override the constructor *)
 							if get_num_args ctor > get_num_args ctor_super then
-								Hashtbl.add does_ctor_skipping cl.cl_path root;
+								Hashtbl.replace does_ctor_skipping cl.cl_path root;
 						) cl.cl_constructor;
 						root
 					| _ ->
 						cl
 				in
-				Hashtbl.add needs_ctor_skipping cl.cl_path root;
+				Hashtbl.replace needs_ctor_skipping cl.cl_path root;
 				root
 		in
 		let root_cl = mark_needs_ctor_skipping cl_super in
-		Hashtbl.add does_ctor_skipping cl.cl_path root_cl;
+		Hashtbl.replace does_ctor_skipping cl.cl_path root_cl;
 	in
 
 	let e_empty_super_call = (* super() *)
@@ -127,7 +127,7 @@ let rewrite_ctors com =
 				) this_before_super
 			end else begin
 				(* if there was no ctor in the parent class, we still gotta call `super` *)
-				Hashtbl.add inject_super cl.cl_path cl;
+				Hashtbl.replace inject_super cl.cl_path cl;
 			end
 		| _ -> ()
 	in

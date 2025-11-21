@@ -79,7 +79,7 @@ let collect_module_symbols mname with_locals (pack,decls) =
 		let string_of_path l = String.concat "." l in
 		let add_type d kind =
 			let type_path, type_name = get_decl_path d in
-			Hashtbl.add type_decls type_name ();
+			Hashtbl.replace type_decls type_name ();
 			add type_name kind p (string_of_path type_path) (is_deprecated d.d_meta);
 			string_of_path (type_path @ [type_name])
 		in

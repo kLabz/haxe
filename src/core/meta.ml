@@ -69,7 +69,7 @@ let hmeta =
 	let rec loop i =
 		let m = Obj.magic i in
 		if m <> Last then begin
-			Hashtbl.add h (to_string m) m;
+			Hashtbl.replace h (to_string m) m;
 			loop (i + 1);
 		end;
 	in

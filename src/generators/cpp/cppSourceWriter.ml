@@ -58,7 +58,7 @@ class source_writer common_ctx write_header_func write_func close_func =
 
     method write_h_unique x =
       if not (Hashtbl.mem headerLines x) then (
-        Hashtbl.add headerLines x ();
+        Hashtbl.replace headerLines x ();
         this#write_h x)
 
     method indent_one = this#write indent_str

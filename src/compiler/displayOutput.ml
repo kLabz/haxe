@@ -98,7 +98,7 @@ let print_toplevel il =
 	let check_ident s =
 		if Hashtbl.mem identifiers s then false
 		else begin
-			Hashtbl.add identifiers s true;
+			Hashtbl.replace identifiers s true;
 			true
 		end
 	in

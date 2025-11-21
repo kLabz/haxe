@@ -111,7 +111,7 @@ let sort_types com (modules : module_lut) =
 		| Generating ->
 			module_warning com (t_infos t).mt_module WStaticInitOrder [] ("Warning : maybe loop in static generation of " ^ s_type_path p) (t_infos t).mt_pos;
 		| NotYet ->
-			Hashtbl.add states p Generating;
+			Hashtbl.replace states p Generating;
 			let t = (match t with
 			| TClassDecl c ->
 				walk_class p c;

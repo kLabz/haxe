@@ -173,6 +173,6 @@ let get_signature def =
 let deprecation_lut =
 	let h = Hashtbl.create 0 in
 	List.iter (fun (name,reason) ->
-		Hashtbl.add h name reason
+		Hashtbl.replace h name reason
 	) deprecated_defines;
 	h

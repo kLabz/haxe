@@ -54,7 +54,7 @@ let json_of_diagnostics com dctx =
 			Hashtbl.find diagnostics file
 		with Not_found ->
 			let d = [] in
-			Hashtbl.add diagnostics file d;
+			Hashtbl.replace diagnostics file d;
 			d
 		in
 		if append || (List.find_opt (fun diag -> diag.diag_pos = p) fdiag) = None then

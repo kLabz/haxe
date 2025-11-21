@@ -145,7 +145,7 @@ class sourcemap_writer (generated_file:string) =
 			Hashtbl.find files_indexes pos.pfile
 		with Not_found ->
 			let index = (DynArray.length files) in
-			Hashtbl.add files_indexes pos.pfile index;
+			Hashtbl.replace files_indexes pos.pfile index;
 			DynArray.add files pos.pfile;
 			index
 	(**

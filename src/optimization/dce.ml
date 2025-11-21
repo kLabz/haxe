@@ -152,7 +152,7 @@ let rec check_feature dce s =
 		let l = Hashtbl.find dce.features s in
 		Mutex.lock dce.feature_mutex;
 		if not (Hashtbl.mem dce.checked_features s) then begin
-			Hashtbl.add dce.checked_features s ();
+			Hashtbl.replace dce.checked_features s ();
 			Mutex.unlock dce.feature_mutex;
 			List.iter (fun cfr ->
 				let (c, cf) = resolve_class_field_ref dce cfr in
@@ -787,7 +787,7 @@ let collect_entry_points dce types =
 				let l = Hashtbl.find dce.features s in
 				l := cf_ref :: !l
 			with Not_found ->
-				Hashtbl.add dce.features s (ref [cf_ref])
+				Hashtbl.replace dce.features s (ref [cf_ref])
 		) meta;
 	in
 	List.iter (fun t ->

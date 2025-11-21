@@ -64,7 +64,7 @@ class explore_class_path_task com checked recursive f_pack f_module dir pack = o
 		if (List.mem dot_path !exclude) || Hashtbl.mem checked unique_dir then
 			()
 		else try
-			Hashtbl.add checked unique_dir true;
+			Hashtbl.replace checked unique_dir true;
 			let entries = Sys.readdir dir in
 			Array.iter (fun file ->
 				match file with
@@ -199,7 +199,7 @@ module CollectionContext = struct
 		not (Hashtbl.mem ctx.names name)
 
 	let path_exists ctx path = Hashtbl.mem ctx.paths path
-	let add_path ctx path = Hashtbl.add ctx.paths path true
+	let add_path ctx path = Hashtbl.replace ctx.paths path true
 end
 
 open CollectionContext

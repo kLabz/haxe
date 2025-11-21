@@ -70,7 +70,7 @@ module HashtblList = struct
 		if not (Hashtbl.mem htl.values key) then begin
 			htl.keys <- key :: htl.keys
 		end;
-		Hashtbl.add htl.values key value
+		Hashtbl.replace htl.values key value
 
 	let as_list htl =
 		List.map (fun key ->
@@ -1020,7 +1020,7 @@ class builder jc name jsig = object(self)
 		with Not_found ->
 			let d = DynArray.create () in
 			DynArray.add d (TObject(path,[]),a);
-			Hashtbl.add h slot d
+			Hashtbl.replace h slot d
 
 	(** This function has to be called once all arguments are declared. *)
 	method finalize_arguments =

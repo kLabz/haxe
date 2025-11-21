@@ -87,7 +87,7 @@ class builder path_this path_super = object(self)
 			!r
 		with Not_found ->
 			let r = ref 0 in
-			Hashtbl.add closure_ids_per_name name r;
+			Hashtbl.replace closure_ids_per_name name r;
 			!r
 
 	method spawn_inner_class (jm : JvmMethod.builder option) (path_super : jpath) (name : string option) =
@@ -109,7 +109,7 @@ class builder path_this path_super = object(self)
 			jc#add_attribute (JvmAttribute.AttributeEnclosingMethod(offset_class,offset_info));
 		end;
 		let offset = pool#add_path path in
-		Hashtbl.add inner_classes offset jc;
+		Hashtbl.replace inner_classes offset jc;
 		begin match source_file with
 		| None ->
 			()
@@ -119,7 +119,7 @@ class builder path_this path_super = object(self)
 		jc
 
 	method add_typed_function (path : jpath) =
-		Hashtbl.add typed_function_paths path ()
+		Hashtbl.replace typed_function_paths path ()
 
 	method has_typed_function (path : jpath) =
 		Hashtbl.mem typed_function_paths path
@@ -129,7 +129,7 @@ class builder path_this path_super = object(self)
 		let ssig_method = generate_method_signature false jsig_method in
 		if Hashtbl.mem method_sigs (name,ssig_method) then
 			jerror (Printf.sprintf "Duplicate field on class %s: %s %s" (Globals.s_type_path path_this) name ssig_method);
-		Hashtbl.add method_sigs (name,ssig_method) jm;
+		Hashtbl.replace method_sigs (name,ssig_method) jm;
 		List.iter (fun flag ->
 			jm#add_access_flag (MethodAccessFlags.to_int flag)
 		) flags;

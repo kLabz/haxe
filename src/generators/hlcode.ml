@@ -666,9 +666,9 @@ let dump pr code =
 	pr (string_of_int (Array.length code.natives) ^ " natives");
 	Array.iter (fun (lib,name,t,fidx) ->
 		pr ("	@" ^ string_of_int fidx ^ " native " ^ str lib ^ "@" ^ str name ^ " " ^ tstr t);
-		Hashtbl.add funnames fidx (str lib ^ "@" ^ str name)
+		Hashtbl.replace funnames fidx (str lib ^ "@" ^ str name)
 	) code.natives;
-	Array.iter (fun f -> Hashtbl.add funnames f.findex (fundecl_name f)) code.functions;
+	Array.iter (fun f -> Hashtbl.replace funnames f.findex (fundecl_name f)) code.functions;
 	pr (string_of_int (Array.length code.functions) ^ " functions");
 	Array.iter (fun f ->
 		pr (Printf.sprintf "	fun@%d(%Xh) %s" f.findex f.findex (tstr f.ftype));

@@ -97,7 +97,7 @@ let rec has_feature gctx f =
 			with Not_found ->
 				false
 			) in
-			Hashtbl.add gctx.features f r;
+			Hashtbl.replace gctx.features f r;
 			r
 
 let get_entry_point gctx =

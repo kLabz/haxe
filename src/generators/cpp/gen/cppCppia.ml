@@ -526,7 +526,7 @@ class script_writer ctx filename asciiOut =
       try Hashtbl.find identTable name
       with Not_found ->
         let size = Hashtbl.length identTable in
-        Hashtbl.add identTable name size;
+        Hashtbl.replace identTable name size;
         Buffer.add_string identBuffer
           (string_of_int (String.length name) ^ " " ^ name ^ "\n");
         size
@@ -541,7 +541,7 @@ class script_writer ctx filename asciiOut =
       try Hashtbl.find typeTable name
       with Not_found ->
         let size = Hashtbl.length typeTable in
-        Hashtbl.add typeTable name size;
+        Hashtbl.replace typeTable name size;
         Buffer.add_string typeBuffer
           (string_of_int (String.length name) ^ " " ^ name ^ "\n");
         size
@@ -637,7 +637,7 @@ class script_writer ctx filename asciiOut =
       with Not_found ->
         let stripped_file = strip_file ctx.ctx_common file in
         let result = this#stringId stripped_file in
-        Hashtbl.add fileTable file result;
+        Hashtbl.replace fileTable file result;
         result
 
     method constText c =

@@ -60,10 +60,10 @@ let create_affection_checker () =
 	in
 	let rec collect_modified_locals e = match e.eexpr with
 		| TUnop((Increment | Decrement),_,{eexpr = TLocal v}) ->
-			Hashtbl.add modified_locals v.v_id true
+			Hashtbl.replace modified_locals v.v_id true
 		| TBinop((OpAssign | OpAssignOp _),{eexpr = TLocal v},e2) ->
 			collect_modified_locals e2;
-			Hashtbl.add modified_locals v.v_id true
+			Hashtbl.replace modified_locals v.v_id true
 		| _ ->
 			Type.iter collect_modified_locals e
 	in

@@ -340,7 +340,7 @@ module Graph = struct
 	(* nodes *)
 
 	let add_function g tf t p bb =
-		Hashtbl.add g.g_functions bb.bb_id (bb,t,p,tf)
+		Hashtbl.replace g.g_functions bb.bb_id (bb,t,p,tf)
 
 	let alloc_id =
 		let r = Atomic.make 1 in
@@ -436,7 +436,7 @@ module Graph = struct
 				bucket = [];
 			} in
 			let bbi = if bb == bb_parent then bbi else {bbi with parent = get_info bb_parent.bb_id} in
-			Hashtbl.add info bb.bb_id bbi;
+			Hashtbl.replace info bb.bb_id bbi;
 			DynArray.add nodes bbi;
 		in
 		let rec loop bb_parent bb =

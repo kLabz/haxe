@@ -484,7 +484,7 @@ let code_graph (f:fundecl) =
 				bneed_all = None;
 				btrap = trapl;
 			} in
-			Hashtbl.add blocks_pos pos b;
+			Hashtbl.replace blocks_pos pos b;
 			let rec loop i =
 				let goto ?(tl=b.btrap) d =
 					let b2 = make_block tl (i + 1 + d) in
@@ -589,7 +589,7 @@ let remap_fun ctx f dump get_str old_code =
 				let wp = try PMap.find reg b.bwrite with Not_found -> -1 in
 				let rec gather b =
 					if Hashtbl.mem gmap b.bstart then [] else begin
-						Hashtbl.add gmap b.bstart ();
+						Hashtbl.replace gmap b.bstart ();
 						(* lookup in all parent blocks, recursively, to fetch all last writes *)
 						List.fold_left (fun acc bp ->
 							if bp.bstart > b.bstart then acc else
@@ -631,7 +631,7 @@ let remap_fun ctx f dump get_str old_code =
 		Array.iter (fun (var,pos) -> if pos >= 0 then Hashtbl.replace old_assigns pos var) f.assigns;
 		Array.iter (fun (var,pos) ->
 			if pos >= 0 then begin
-				let f = try Hashtbl.find new_assigns pos with Not_found -> let v = ref [] in Hashtbl.add new_assigns pos v; v in
+				let f = try Hashtbl.find new_assigns pos with Not_found -> let v = ref [] in Hashtbl.replace new_assigns pos v; v in
 				f := var :: !f;
 			end
 		) !assigns;
@@ -765,7 +765,7 @@ let _optimize (f:fundecl) =
 
 	let reg_moved = Hashtbl.create 0 in
 	let add_reg_moved p w r =
-		Hashtbl.add reg_moved p (r,last_write.(r))
+		Hashtbl.replace reg_moved p (r,last_write.(r))
 	in
 
 	let set_live r min max =
