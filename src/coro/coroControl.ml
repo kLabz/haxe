@@ -1,6 +1,5 @@
 open Globals
 open Type
-open Texpr
 
 type coro_control =
 	| CoroPending

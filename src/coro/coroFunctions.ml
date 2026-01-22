@@ -1,4 +1,3 @@
-open Globals
 open Type
 open CoroTypes
 

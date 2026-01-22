@@ -1,7 +1,6 @@
 open Ast
 open Type
 open Globals
-open Error
 open CppAst
 open CppTypeUtils
 open CppMarshalling

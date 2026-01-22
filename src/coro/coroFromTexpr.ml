@@ -2,7 +2,6 @@ open Globals
 open Type
 open CoroTypes
 open CoroFunctions
-open LocalUsage
 
 let e_no_value = Texpr.Builder.make_null t_dynamic null_pos
 
