@@ -31,6 +31,14 @@ let create () = {
 let error s =
 	Error.raise_typing_error s null_pos
 
+(*
+	The "include" and "exclude" entries are lists of module dot-path filters,
+	matched against module paths with `Ast.match_path` (recursively). Besides
+	plain prefixes, a filter may use wildcard segments: `*` matches exactly one
+	path segment and `**` matches zero or more segments (any depth). For example
+	`["foo.**"]` selects every module under package `foo`. Wildcards must be
+	whole segments; partial wildcards such as `foo*` are not supported.
+*)
 module WriterConfigReader (API : DataReaderApi.DataReaderApi) = struct
 	let read_target_config config fl =
 		List.iter (fun (s,data) -> match s with
