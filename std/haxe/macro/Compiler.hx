@@ -335,6 +335,13 @@ class Compiler {
 		If `pathFilter` is the empty String `""` it matches everything (if
 		`recursive = true`) or only top-level types (if `recursive = false`).
 
+		`pathFilter` may contain wildcard segments: `*` matches exactly one
+		path segment, while `**` matches zero or more segments (any depth).
+		For example `foo.*.toString` matches the `toString` field of every
+		type directly in package `foo`, whereas `foo.**.toString` matches it
+		at any depth. Wildcards must be whole segments; partial wildcards such
+		as `foo*` are not supported.
+
 		This operation has no effect if the type has already been loaded, e.g.
 		through `Context.getType`.
 	**/
