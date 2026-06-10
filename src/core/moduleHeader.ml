@@ -138,13 +138,32 @@ let s_field_flags cf =
 	let l = List.filter (fun flag -> has_class_field_flag cf flag) observable_field_flags in
 	String.concat "," (List.map (fun f -> List.nth flag_tclass_field_names (int_of_class_field_flag f)) l)
 
+(* Implementation fields — inline / macro / @:generic — carry their *body* into callers
+   (inlining, specialization, compile-time eval), so the body is part of what a dependent observes.
+   For these (and only these) the header includes a canonical rendering of [cf_expr], so a body
+   change is visible to [header_diff] even when the signature is unchanged. *)
+let is_impl_field cf =
+	match cf.cf_kind with
+	| Method (MethInline | MethMacro) -> true
+	| Var { v_read = AccInline } -> true
+	| _ -> has_class_field_flag cf CfGeneric
+
+let s_field_body cf =
+	if is_impl_field cf then
+		match cf.cf_expr with
+		| Some e -> TPrinting.s_expr_pretty false "" false s_sig e
+		| None -> ""
+	else
+		""
+
 let s_field cf =
-	Printf.sprintf "%s|%s|%s|%s|%s"
+	Printf.sprintf "%s|%s|%s|%s|%s|%s"
 		(s_field_kind cf.cf_kind)
 		(s_type_params cf.cf_params)
 		(s_sig cf.cf_type)
 		(s_field_flags cf)
 		(s_meta cf.cf_meta)
+		(s_field_body cf)
 
 (* ---------------------------------------------------------------------- *)
 (* Structural signatures (the non-field part of each decl)                 *)
@@ -347,7 +366,11 @@ let field_key_of_dep_field df =
      the field-granular edges above; relying on that keeps imports from invalidating on every edit).
    - Macro-origin edges are implementation dependencies (the dependent ran a macro from the target),
      so any change to the target is observable. *)
-let edge_observes_changes changes edge =
+(* [field_is_impl tn key] tells whether the field identified by header key [key] of type [tn] is an
+   implementation field (inline/macro/@:generic) in the *new* header — supplied by the caller, which
+   has the live module. Such a field's body is inlined/specialized into callers, so a module-level
+   edge must observe its change even though it names no specific field. *)
+let edge_observes_changes ~field_is_impl changes edge =
 	match edge.dep_tgt_origin with
 	| MDepFromMacro | MDepFromMacroDefine ->
 		(* Implementation dependency: a macro can observe anything about the target (bodies, AST,
@@ -357,9 +380,14 @@ let edge_observes_changes changes edge =
 	| _ ->
 	match edge.dep_tgt with
 	| None ->
+		(* Module-/type-level edge (import, inheritance, structural reference). It does not name a
+		   field, so it cannot observe ordinary field-signature changes (those are captured by the
+		   field-granular edges) — but it MUST observe structure, type add/remove, field removals,
+		   and changes to implementation fields whose body the dependent may have baked in. *)
 		List.exists (function
 			| HCStructural _ | HCTypeAdded _ | HCTypeRemoved _ -> true
-			| HCFieldChanged _ | HCFieldAdded _ | HCFieldRemoved _ -> false
+			| HCFieldRemoved _ -> true
+			| HCFieldChanged(n,k) | HCFieldAdded(n,k) -> field_is_impl n k
 		) changes
 	| Some df ->
 		let tn = snd df.dfd_path in
@@ -373,12 +401,11 @@ let edge_observes_changes changes edge =
 
 (* Given the dependency's old and new header and the set of edges from the dependent that point at
    that dependency, decide whether the change is observable to the dependent (⇒ it must be
-   invalidated). [impl_blocks] is supplied by the caller to veto sparing when an edge targets an
-   inline/macro/@:generic field whose *body* (not captured by the header) the dependent inlines. *)
-let dep_change_observable ?(impl_blocks=fun _ -> false) old_header new_header edges =
-	List.exists (fun edge -> impl_blocks edge) edges
-	|| (let changes = header_diff old_header new_header in
-		changes <> [] && List.exists (edge_observes_changes changes) edges)
+   invalidated). [field_is_impl] lets module-level edges detect changes to inline/macro/@:generic
+   fields (whose bodies are now part of the header). *)
+let dep_change_observable ~field_is_impl old_header new_header edges =
+	let changes = header_diff old_header new_header in
+	changes <> [] && List.exists (edge_observes_changes ~field_is_impl changes) edges
 
 (* ---------------------------------------------------------------------- *)
 (* Serialization                                                           *)

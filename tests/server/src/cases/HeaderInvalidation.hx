@@ -27,4 +27,18 @@ class HeaderInvalidation extends TestCase {
 		runHaxe(args);
 		Assert.isFalse(hasMessage("reusing Main"));
 	}
+
+	// Inlined bodies are baked into callers, so changing an inline function's *body* (signature
+	// unchanged) must still invalidate the caller, even though the header is identical.
+	function testInlineBody() {
+		vfs.putContent("DepInline.hx", getTemplate("HeaderInvalidation/DepInline.hx"));
+		vfs.putContent("MainInline.hx", getTemplate("HeaderInvalidation/MainInline.hx"));
+		var args = ["-main", "MainInline", "--no-output", "-js", "no.js", "-D", "hxb.header-invalidation"];
+		runHaxe(args);
+
+		vfs.putContent("DepInline.hx", getTemplate("HeaderInvalidation/DepInline.hx").replace("return 1", "return 2"));
+		runHaxeJson([], ServerMethods.Invalidate, {file: new FsPath("DepInline.hx")});
+		runHaxe(args);
+		Assert.isFalse(hasMessage("reusing MainInline"));
+	}
 }

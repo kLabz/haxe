@@ -133,27 +133,23 @@ let get_typing_mode com m_extra =
 	in
 	if full_typing then FullTyping else AllowPartialTyping
 
-(* Is the field referenced by [df] in module [m] an *implementation* dependency, i.e. one whose
-   body is carried into callers (inline/macro/@:generic)? Such a field's body is not captured by the
-   header, so a header-only comparison cannot prove the dependent is unaffected. When in doubt
-   (field not found), return true so we never spare unsoundly. *)
-let dep_field_is_impl m df =
-	let is_impl_cf cf = match cf.cf_kind with
-		| Method (MethInline | MethMacro) -> true
-		| Var { v_read = AccInline } -> true
-		| _ -> has_class_field_flag cf CfGeneric
-	in
+(* Is the field identified by header key [key] (e.g. "s:foo", "i:bar", "c:") of type [tn] in module
+   [m] an *implementation* field (inline/macro/@:generic)? Its body is inlined/specialized into
+   callers, so a module-level edge must treat a change to it as observable. When in doubt (field not
+   found, e.g. just removed), return true so we never spare unsoundly. *)
+let header_field_is_impl m tn key =
 	try
-		let mt = List.find (fun mt -> t_path mt = df.dfd_path) m.m_types in
+		let mt = List.find (fun mt -> snd (t_path mt) = tn) m.m_types in
 		begin match mt with
 		| TClassDecl c ->
-			let cf = match df.dfd_kind with
-				| CfrStatic -> PMap.find df.dfd_field c.cl_statics
-				| CfrMember -> PMap.find df.dfd_field c.cl_fields
-				| CfrConstructor -> (match c.cl_constructor with Some cf -> cf | None -> raise Not_found)
-				| CfrInit -> raise Not_found
+			let after pfx = String.sub key (String.length pfx) (String.length key - String.length pfx) in
+			let cf =
+				if ExtString.String.starts_with key "s:" then PMap.find (after "s:") c.cl_statics
+				else if ExtString.String.starts_with key "i:" then PMap.find (after "i:") c.cl_fields
+				else if key = "c:" then (match c.cl_constructor with Some cf -> cf | None -> raise Not_found)
+				else raise Not_found
 			in
-			is_impl_cf cf
+			ModuleHeader.is_impl_field cf
 		| _ ->
 			false
 		end
@@ -185,13 +181,9 @@ let dependency_change_observable com m_extra sign mpath m2_extra =
 				) m_extra.m_field_deps [] in
 				if edges = [] then
 					true
-				else begin
-					let impl_blocks edge = match edge.dep_tgt with
-						| None -> false
-						| Some df -> dep_field_is_impl m_new df
-					in
-					ModuleHeader.dep_change_observable ~impl_blocks old_header new_header edges
-				end
+				else
+					let field_is_impl tn key = header_field_is_impl m_new tn key in
+					ModuleHeader.dep_change_observable ~field_is_impl old_header new_header edges
 			end
 		| _ ->
 			true
