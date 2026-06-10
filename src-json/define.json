@@ -361,6 +361,12 @@
 		"doc": "Verify that the field-granular dependency edges cover every cross-module reference in the typed AST; reports field-covered / module-only / uncovered counts."
 	},
 	{
+		"name": "DumpHeaders",
+		"define": "hxb.dump_headers",
+		"signatureNeutral": true,
+		"doc": "Dump each typed module's structured signature header (module headers, phase 1) to dump/<target>/headers; also checks header generation is deterministic."
+	},
+	{
 		"name": "HxcppApiLevel",
 		"define": "hxcpp-api-level",
 		"doc": "Provided to allow compatibility between hxcpp versions.",

@@ -139,7 +139,9 @@ let maybe_generate_dump_dependencies ctx tctx =
 			| Some(_,ctx) -> Dump.dump_dependencies ~target_override:(Some "macro") ctx.Typecore.com
 	end;
 	if Common.defined com Define.VerifyFieldDeps then
-		Dump.verify_field_deps com
+		Dump.verify_field_deps com;
+	if Common.defined com Define.DumpHeaders then
+		Dump.dump_headers com
 
 let generate com tctx ext actx =
 	(* check file extension. In case of wrong commandline, we don't want

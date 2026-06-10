@@ -283,6 +283,43 @@ let verify_field_deps com =
 	end;
 	flush stdout
 
+(* Phase 1 module-headers validation: generate each typed module's structured signature header,
+   dump it for inspection, and confirm generation is deterministic (regenerating the same module
+   must produce an identical header — otherwise diffs would be spurious). *)
+let dump_headers com =
+	let target_name = platform_name_macro com in
+	let headers_path = [com.part_scope.dump_config.dump_path;target_name;"headers"] in
+	let buf,close = create_dumpfile [] headers_path in
+	let print fmt = Printf.kprintf (fun s -> Buffer.add_string buf s) fmt in
+	let n_modules = ref 0 and n_decls = ref 0 and n_fields = ref 0 and n_nondet = ref 0 in
+	let modules = List.sort (fun a b -> compare a.m_path b.m_path) com.Common.modules in
+	List.iter (fun m ->
+		incr n_modules;
+		let h = ModuleHeader.module_header_of m in
+		(* Determinism check: regenerate and diff against the first header. *)
+		let h2 = ModuleHeader.module_header_of m in
+		let nondet = ModuleHeader.header_diff h h2 in
+		if nondet <> [] then begin
+			incr n_nondet;
+			print "!! NON-DETERMINISTIC %s: %s\n" (s_type_path m.m_path)
+				(String.concat ", " (List.map ModuleHeader.s_header_change nondet))
+		end;
+		print "module %s:\n" (s_type_path m.m_path);
+		let decls = PMap.foldi (fun name decl acc -> (name,decl) :: acc) h.ModuleHeader.mh_decls [] in
+		let decls = List.sort (fun (a,_) (b,_) -> compare a b) decls in
+		List.iter (fun (name,decl) ->
+			incr n_decls;
+			print "  %s\n    struct: %s\n" name decl.ModuleHeader.hd_struct;
+			let fields = PMap.foldi (fun k v acc -> (k,v) :: acc) decl.ModuleHeader.hd_fields [] in
+			let fields = List.sort (fun (a,_) (b,_) -> compare a b) fields in
+			List.iter (fun (k,v) -> incr n_fields; print "    %s = %s\n" k v) fields
+		) decls
+	) modules;
+	close ();
+	print_endline (Printf.sprintf "[dump-headers] %d modules, %d type decls, %d fields, %d non-deterministic"
+		!n_modules !n_decls !n_fields !n_nondet);
+	flush stdout
+
 let maybe_generate_dump com stage =
 	if com.Common.part_scope.dump_config.dump_mode <> NoDump && com.part_scope.dump_config.dump_stage = stage then begin
 		Timer.time com.timer_ctx ["generate";"dump"] (fun () ->
