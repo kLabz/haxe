@@ -133,6 +133,101 @@ let get_typing_mode com m_extra =
 	in
 	if full_typing then FullTyping else AllowPartialTyping
 
+(* Is the field referenced by [df] in module [m] an *implementation* dependency, i.e. one whose
+   body is carried into callers (inline/macro/@:generic)? Such a field's body is not captured by the
+   header, so a header-only comparison cannot prove the dependent is unaffected. When in doubt
+   (field not found), return true so we never spare unsoundly. *)
+let dep_field_is_impl m df =
+	let is_impl_cf cf = match cf.cf_kind with
+		| Method (MethInline | MethMacro) -> true
+		| Var { v_read = AccInline } -> true
+		| _ -> has_class_field_flag cf CfGeneric
+	in
+	try
+		let mt = List.find (fun mt -> t_path mt = df.dfd_path) m.m_types in
+		begin match mt with
+		| TClassDecl c ->
+			let cf = match df.dfd_kind with
+				| CfrStatic -> PMap.find df.dfd_field c.cl_statics
+				| CfrMember -> PMap.find df.dfd_field c.cl_fields
+				| CfrConstructor -> (match c.cl_constructor with Some cf -> cf | None -> raise Not_found)
+				| CfrInit -> raise Not_found
+			in
+			is_impl_cf cf
+		| _ ->
+			false
+		end
+	with Not_found ->
+		true
+
+(* Header-based spare decision (phase 1, opt-in via [hxb.header-invalidation]). [m_extra] is the
+   dependent; [(sign,mpath,m2_extra)] identify a dependency that just checked dirty. Returns true if
+   the change is observable to the dependent (it must be invalidated), false if it can be spared.
+
+   Conservatively returns true whenever the information needed for a sound comparison is missing:
+   the old header (cached) or the freshly-typed new header (in [module_lut], produced by the
+   frontier pre-phase) is absent, or the dependency hasn't been re-typed this round. *)
+let dependency_change_observable com m_extra sign mpath m2_extra =
+	if not (Define.defined com.defines Define.HxbHeaderInvalidation) then
+		true
+	else match m2_extra.m_header with
+	| None ->
+		true
+	| Some old_header ->
+		begin match (try Some (com.module_lut#find mpath) with Not_found -> None) with
+		| Some m_new when m_new.m_extra.m_sign = sign ->
+			begin match m_new.m_extra.m_header with
+			| None ->
+				true
+			| Some new_header ->
+				let edges = PMap.fold (fun edge acc ->
+					if edge.dep_tgt_path = mpath && edge.dep_tgt_sign = sign then edge :: acc else acc
+				) m_extra.m_field_deps [] in
+				if edges = [] then
+					true
+				else begin
+					let impl_blocks edge = match edge.dep_tgt with
+						| None -> false
+						| Some df -> dep_field_is_impl m_new df
+					in
+					ModuleHeader.dep_change_observable ~impl_blocks old_header new_header edges
+				end
+			end
+		| _ ->
+			true
+		end
+
+(* The dirty frontier: cached source modules whose own file changed (the roots of invalidation).
+   Used by the phase-1 pre-phase to re-type these FIRST, so their fresh headers are available when
+   [dependency_change_observable] decides whether their dependents can be spared. This is only a
+   heuristic seed (file-mtime, no shadowing/library checks): missing a dirty module just falls back
+   to the normal conservative path, so soundness does not depend on it being complete. *)
+let collect_dirty_frontier com =
+	if not (Define.defined com.defines Define.HxbHeaderInvalidation) then
+		[]
+	else begin
+		let cc = CommonCache.get_cache com in
+		let acc = ref [] in
+		let consider m_path m_extra =
+			match m_extra.m_kind with
+			| MCode | MMacro ->
+				let tainted = match m_extra.m_cache_state with MSBad _ -> true | _ -> false in
+				let file = Path.UniqueKey.lazy_path m_extra.m_file in
+				let file_changed =
+					Path.file_extension file = "hx"
+					&& (try file_time file <> m_extra.m_time with _ -> false)
+				in
+				if tainted || file_changed then acc := m_path :: !acc
+			| MFake | MImport | MExtern ->
+				()
+		in
+		Hashtbl.iter (fun path m -> consider path m.m_extra) cc#get_modules;
+		Hashtbl.iter (fun path mc ->
+			if not (Hashtbl.mem cc#get_modules path) then consider path mc.HxbData.mc_extra
+		) cc#get_hxb;
+		!acc
+	end
+
 (* Checks if module [m] can be reused from the cache and returns None in that case. Otherwise, returns
    [Some m'] where [m'] is the module responsible for [m] not being reusable. *)
 let check_module sctx com m_path m_extra p =
@@ -227,7 +322,11 @@ let check_module sctx com m_path m_extra p =
 				in
 				match check mpath m2_extra with
 				| None -> ()
-				| Some reason -> raise (Dirty (DependencyDirty(mpath,reason)))
+				| Some reason ->
+					(* The dependency is dirty, but a dirty dependency is only a reason to invalidate
+					   if its *signature* (header) changed in a way this module can observe. *)
+					if dependency_change_observable com m_extra sign mpath m2_extra then
+						raise (Dirty (DependencyDirty(mpath,reason)))
 			) m_extra.m_deps
 		in
 		let check () =

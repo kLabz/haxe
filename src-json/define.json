@@ -82,6 +82,12 @@
 		"doc": "Disable shortcuts used by hxb cache to speed up display requests."
 	},
 	{
+		"name": "HxbHeaderInvalidation",
+		"define": "hxb.header-invalidation",
+		"signatureNeutral": true,
+		"doc": "Use structured module headers (phase 1) to spare dependents whose used signatures are unchanged."
+	},
+	{
 		"name": "DisableParallelism",
 		"define": "disable-parallelism",
 		"signatureNeutral": true,

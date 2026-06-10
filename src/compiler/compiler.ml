@@ -261,6 +261,36 @@ let check_defines com =
 			()
 	) com.defines.values
 
+(* Phase 1 header invalidation (opt-in via [hxb.header-invalidation]): re-type the dirty frontier
+   (changed source modules) before the main typing pass and drain the typing passes so their
+   inferred / macro-generated signatures are resolved, then snapshot fresh headers into
+   [module_lut]. [ServerCache.dependency_change_observable] compares these against the cached (old)
+   headers to spare dependents whose used signatures did not change. Compile errors are ignored
+   here: a genuine error in a reachable module resurfaces in the main pass below. *)
+let retype_dirty_frontier com tctx =
+	match ServerCache.collect_dirty_frontier com with
+	| [] ->
+		()
+	| paths ->
+		List.iter (fun mpath ->
+			(try
+				ignore(tctx.Typecore.g.Typecore.do_load_module tctx mpath null_pos)
+			with Error.Error _ | Error.Fatal_error _ ->
+				());
+			Typecore.flush_pass tctx.g PBuildClass "header-prephase"
+		) paths;
+		(try
+			Typecore.flush_pass tctx.g PFinal "header-prephase"
+		with Error.Error _ | Error.Fatal_error _ ->
+			());
+		List.iter (fun mpath ->
+			try
+				let m = com.module_lut#find mpath in
+				m.m_extra.m_header <- Some (ModuleHeader.module_header_of m)
+			with Not_found ->
+				()
+		) paths
+
 (** Creates the typer context and types [classes] into it. *)
 let do_type com mctx actx display_file_dot_path =
 	let cs = com.cs in
@@ -289,6 +319,7 @@ let do_type com mctx actx display_file_dot_path =
 		com.callbacks#run com.error_ext com.callbacks#get_after_init_macros;
 		run_or_diagnose com (fun () ->
 			if com.display.dms_kind <> DMNone then DisplayTexpr.check_display_file tctx cs;
+			retype_dirty_frontier com tctx;
 			List.iter (fun cpath ->
 				ignore(tctx.Typecore.g.Typecore.do_load_module tctx cpath null_pos);
 				Typecore.flush_pass tctx.g PBuildClass "actx.classes"

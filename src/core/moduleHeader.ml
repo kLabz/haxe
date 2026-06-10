@@ -324,6 +324,63 @@ let headers_equal old_header new_header =
 	header_diff old_header new_header = []
 
 (* ---------------------------------------------------------------------- *)
+(* Field-granular spare decision                                           *)
+
+(* The field key a [dep_field] target maps to in a [header_decl]. [CfrInit] (cl_init) is not
+   part of the header, so it has no key (the caller treats [None] as "any change to the type"). *)
+let field_key_of_dep_field df =
+	match df.dfd_kind with
+	| CfrStatic -> Some ("s:" ^ df.dfd_field)
+	| CfrMember -> Some ("i:" ^ df.dfd_field)
+	| CfrConstructor -> Some "c:"
+	| CfrInit -> None
+
+(* Does a single dependency edge observe [changes] (the [header_diff] of the dependency)?
+
+   - [dep_tgt = Some df]: the dependent uses a specific field. It is affected only if that field's
+     own signature changed, the field was removed, or the declaring type's structure changed (the
+     latter can shift what the field means). Changes to *other* fields of the dependency are
+     invisible — this is the precision win.
+   - [dep_tgt = None]: a module-/type-level dependency (import, inheritance, structural signature
+     reference, macro). We do not know which field, so we conservatively observe structural changes
+     and type additions/removals, but NOT individual field-signature changes (those are captured by
+     the field-granular edges above; relying on that keeps imports from invalidating on every edit).
+   - Macro-origin edges are implementation dependencies (the dependent ran a macro from the target),
+     so any change to the target is observable. *)
+let edge_observes_changes changes edge =
+	match edge.dep_tgt_origin with
+	| MDepFromMacro | MDepFromMacroDefine ->
+		(* Implementation dependency: a macro can observe anything about the target (bodies, AST,
+		   even unrelated state), none of which the header captures. If the target is dirty at all,
+		   the dependent must be invalidated. *)
+		true
+	| _ ->
+	match edge.dep_tgt with
+	| None ->
+		List.exists (function
+			| HCStructural _ | HCTypeAdded _ | HCTypeRemoved _ -> true
+			| HCFieldChanged _ | HCFieldAdded _ | HCFieldRemoved _ -> false
+		) changes
+	| Some df ->
+		let tn = snd df.dfd_path in
+		let key = field_key_of_dep_field df in
+		List.exists (function
+			| HCStructural n | HCTypeRemoved n -> n = tn
+			| HCTypeAdded _ -> false
+			| HCFieldChanged(n,k) | HCFieldAdded(n,k) | HCFieldRemoved(n,k) ->
+				n = tn && (match key with Some key -> key = k | None -> true)
+		) changes
+
+(* Given the dependency's old and new header and the set of edges from the dependent that point at
+   that dependency, decide whether the change is observable to the dependent (⇒ it must be
+   invalidated). [impl_blocks] is supplied by the caller to veto sparing when an edge targets an
+   inline/macro/@:generic field whose *body* (not captured by the header) the dependent inlines. *)
+let dep_change_observable ?(impl_blocks=fun _ -> false) old_header new_header edges =
+	List.exists (fun edge -> impl_blocks edge) edges
+	|| (let changes = header_diff old_header new_header in
+		changes <> [] && List.exists (edge_observes_changes changes) edges)
+
+(* ---------------------------------------------------------------------- *)
 (* Serialization                                                           *)
 
 (* Self-contained binary encoding (length-prefixed strings, little-endian u32 counts/lengths).
