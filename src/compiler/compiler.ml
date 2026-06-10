@@ -275,25 +275,24 @@ let retype_dirty_frontier com tctx =
 	| paths ->
 		if dbg then Printf.eprintf "[header-invalidation] frontier: %d modules [%s]\n%!"
 			(List.length paths) (String.concat ", " (List.map s_type_path paths));
-		List.iter (fun mpath ->
-			(try
-				ignore(tctx.Typecore.g.Typecore.do_load_module tctx mpath null_pos)
-			with Error.Error _ | Error.Fatal_error _ ->
-				());
-			Typecore.flush_pass tctx.g PBuildClass "header-prephase"
-		) paths;
+		let modules = List.filter_map (fun mpath ->
+			let r =
+				try Some (tctx.Typecore.g.Typecore.do_load_module tctx mpath null_pos)
+				with Error.Error _ | Error.Fatal_error _ -> None
+			in
+			Typecore.flush_pass tctx.g PBuildClass "header-prephase";
+			r
+		) paths in
 		(try
 			Typecore.flush_pass tctx.g PFinal "header-prephase"
 		with Error.Error _ | Error.Fatal_error _ ->
 			());
-		List.iter (fun mpath ->
-			try
-				let m = com.module_lut#find mpath in
-				m.m_extra.m_header <- Some (ModuleHeader.module_header_of m);
-				if dbg then Printf.eprintf "[header-invalidation] frontier typed: %s (header set)\n%!" (s_type_path mpath)
-			with Not_found ->
-				if dbg then Printf.eprintf "[header-invalidation] frontier MISSING from lut: %s\n%!" (s_type_path mpath)
-		) paths
+		(* Now that the frontier is fully typed, diff each fresh header against the cached one and
+		   record the result for the dependency check. *)
+		List.iter (fun m ->
+			ServerCache.note_retyped_module com m;
+			if dbg then Printf.eprintf "[header-invalidation] frontier typed: %s\n%!" (s_type_path m.m_path)
+		) modules
 
 (** Creates the typer context and types [classes] into it. *)
 let do_type com mctx actx display_file_dot_path =

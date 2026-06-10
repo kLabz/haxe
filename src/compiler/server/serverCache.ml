@@ -157,64 +157,81 @@ let header_field_is_impl m tn key =
 		true
 
 (* Diagnostic tally of why dependency decisions go the way they do, per compile. Printed at the end
-   of a compile when [-D hxb.header-invalidation] is set, to distinguish "spare path didn't engage"
-   (no fresh header / no edges) from "header genuinely differed" (real or spurious diff). *)
+   of a compile when [-D hxb.header_stats] is set, to distinguish "spare path didn't engage" (the
+   dependency was never re-typed this round, so no fresh header) from "header genuinely differed". *)
 type spare_stats = {
-	mutable sp_spared : int;        (* dependent spared: header identical / no used field changed *)
+	mutable sp_spared : int;        (* dependent spared: no used field's header changed *)
 	mutable sp_observed : int;      (* invalidated: header diff observed in a used field *)
-	mutable sp_no_old : int;        (* conservative: no cached (old) header *)
-	mutable sp_no_new : int;        (* conservative: dependency not re-typed / no fresh header *)
+	mutable sp_no_delta : int;      (* conservative: dependency not re-typed this round (no diff) *)
 	mutable sp_no_edges : int;      (* conservative: no field-dep edges to the dependency *)
 }
 
-let spare_stats = { sp_spared = 0; sp_observed = 0; sp_no_old = 0; sp_no_new = 0; sp_no_edges = 0 }
+let spare_stats = { sp_spared = 0; sp_observed = 0; sp_no_delta = 0; sp_no_edges = 0 }
 
 let reset_spare_stats () =
 	spare_stats.sp_spared <- 0; spare_stats.sp_observed <- 0;
-	spare_stats.sp_no_old <- 0; spare_stats.sp_no_new <- 0; spare_stats.sp_no_edges <- 0
+	spare_stats.sp_no_delta <- 0; spare_stats.sp_no_edges <- 0
 
-(* Opt-in diagnostic (-D hxb-header-stats); kept off the normal stderr so it can't trip
+(* Per-compile record, keyed by (signature, module path), of the header [changes] for each module
+   the frontier pre-phase re-typed, together with that re-typed [module_def] (used to tell whether a
+   changed field is an implementation field). Populated in the pre-phase — where both the cached old
+   header and the freshly-typed new one are in hand — and consulted during the dependency check, so
+   the check never relies on [module_lut] (which is empty at that point). Reset each compile. *)
+let header_deltas : (Digest.t * path, ModuleHeader.header_change list * module_def) Hashtbl.t = Hashtbl.create 0
+
+let reset_header_deltas () = Hashtbl.clear header_deltas
+
+(* Opt-in diagnostic (-D hxb.header_stats); kept off the normal stderr so it can't trip
    assertSilence in the test suite. *)
 let dump_spare_stats com =
 	if Define.raw_defined com.defines "hxb.header_stats" then
-		Printf.eprintf "[header-invalidation] spared=%d observed=%d | conservative: no-old=%d no-new=%d no-edges=%d\n%!"
-			spare_stats.sp_spared spare_stats.sp_observed spare_stats.sp_no_old spare_stats.sp_no_new spare_stats.sp_no_edges
+		Printf.eprintf "[header-invalidation] spared=%d observed=%d | conservative: no-delta=%d no-edges=%d | frontier diffed=%d\n%!"
+			spare_stats.sp_spared spare_stats.sp_observed spare_stats.sp_no_delta spare_stats.sp_no_edges (Hashtbl.length header_deltas)
+
+(* Called by the frontier pre-phase once a changed module has been fully re-typed: diff its fresh
+   header against the one persisted in the cache by the previous compile, store the fresh header on
+   the module (so it is written back at cache time, like hxb), and remember the diff for the check. *)
+let note_retyped_module com m =
+	if Define.defined com.defines Define.HxbHeaderInvalidation then begin
+		let sign = m.m_extra.m_sign in
+		let old_header =
+			try ((com.cs#get_context sign)#find_module_extra m.m_path).m_header
+			with Not_found -> None
+		in
+		let new_header = ModuleHeader.module_header_of m in
+		m.m_extra.m_header <- Some new_header;
+		match old_header with
+		| None ->
+			() (* no baseline to diff against: dependents stay conservative *)
+		| Some old_header ->
+			let changes = ModuleHeader.header_diff old_header new_header in
+			Hashtbl.replace header_deltas (sign,m.m_path) (changes,m)
+	end
 
 (* Header-based spare decision (phase 1, opt-in via [hxb.header-invalidation]). [m_extra] is the
-   dependent; [(sign,mpath,m2_extra)] identify a dependency that just checked dirty. Returns true if
-   the change is observable to the dependent (it must be invalidated), false if it can be spared.
+   dependent; [(sign,mpath)] identify a dependency that just checked dirty. Returns true if the
+   change is observable to the dependent (it must be invalidated), false if it can be spared.
 
-   Conservatively returns true whenever the information needed for a sound comparison is missing:
-   the old header (cached) or the freshly-typed new header (in [module_lut], produced by the
-   frontier pre-phase) is absent, or the dependency hasn't been re-typed this round. *)
-let dependency_change_observable com m_extra sign mpath m2_extra =
+   Conservatively returns true whenever the dependency was not re-typed this round (so we have no
+   fresh header to diff) or the dependent records no field-granular edge to it. *)
+let dependency_change_observable com m_extra sign mpath =
 	if not (Define.defined com.defines Define.HxbHeaderInvalidation) then
 		true
-	else match m2_extra.m_header with
+	else match Hashtbl.find_opt header_deltas (sign,mpath) with
 	| None ->
-		spare_stats.sp_no_old <- spare_stats.sp_no_old + 1; true
-	| Some old_header ->
-		begin match (try Some (com.module_lut#find mpath) with Not_found -> None) with
-		| Some m_new when m_new.m_extra.m_sign = sign ->
-			begin match m_new.m_extra.m_header with
-			| None ->
-				spare_stats.sp_no_new <- spare_stats.sp_no_new + 1; true
-			| Some new_header ->
-				let edges = PMap.fold (fun edge acc ->
-					if edge.dep_tgt_path = mpath && edge.dep_tgt_sign = sign then edge :: acc else acc
-				) m_extra.m_field_deps [] in
-				if edges = [] then begin
-					spare_stats.sp_no_edges <- spare_stats.sp_no_edges + 1; true
-				end else begin
-					let field_is_impl tn key = header_field_is_impl m_new tn key in
-					let observable = ModuleHeader.dep_change_observable ~field_is_impl old_header new_header edges in
-					if observable then spare_stats.sp_observed <- spare_stats.sp_observed + 1
-					else spare_stats.sp_spared <- spare_stats.sp_spared + 1;
-					observable
-				end
-			end
-		| _ ->
-			spare_stats.sp_no_new <- spare_stats.sp_no_new + 1; true
+		spare_stats.sp_no_delta <- spare_stats.sp_no_delta + 1; true
+	| Some (changes,m_new) ->
+		let edges = PMap.fold (fun edge acc ->
+			if edge.dep_tgt_path = mpath && edge.dep_tgt_sign = sign then edge :: acc else acc
+		) m_extra.m_field_deps [] in
+		if edges = [] then begin
+			spare_stats.sp_no_edges <- spare_stats.sp_no_edges + 1; true
+		end else begin
+			let field_is_impl tn key = header_field_is_impl m_new tn key in
+			let observable = ModuleHeader.changes_observable ~field_is_impl changes edges in
+			if observable then spare_stats.sp_observed <- spare_stats.sp_observed + 1
+			else spare_stats.sp_spared <- spare_stats.sp_spared + 1;
+			observable
 		end
 
 (* The dirty frontier: cached source modules whose own file changed (the roots of invalidation).
@@ -227,6 +244,7 @@ let collect_dirty_frontier com =
 		[]
 	else begin
 		reset_spare_stats ();
+		reset_header_deltas ();
 		let cc = CommonCache.get_cache com in
 		let acc = ref [] in
 		(* Pre-typing a module runs its @:build / @:genericBuild macros ahead of the normal pass, which
@@ -355,7 +373,7 @@ let check_module sctx com m_path m_extra p =
 				| Some reason ->
 					(* The dependency is dirty, but a dirty dependency is only a reason to invalidate
 					   if its *signature* (header) changed in a way this module can observe. *)
-					if dependency_change_observable com m_extra sign mpath m2_extra then
+					if dependency_change_observable com m_extra sign mpath then
 						raise (Dirty (DependencyDirty(mpath,reason)))
 			) m_extra.m_deps
 		in

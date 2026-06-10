@@ -399,13 +399,17 @@ let edge_observes_changes ~field_is_impl changes edge =
 				n = tn && (match key with Some key -> key = k | None -> true)
 		) changes
 
-(* Given the dependency's old and new header and the set of edges from the dependent that point at
-   that dependency, decide whether the change is observable to the dependent (⇒ it must be
-   invalidated). [field_is_impl] lets module-level edges detect changes to inline/macro/@:generic
-   fields (whose bodies are now part of the header). *)
-let dep_change_observable ~field_is_impl old_header new_header edges =
-	let changes = header_diff old_header new_header in
+(* Given a precomputed [header_diff] (the dependency's [changes]) and the set of edges from the
+   dependent that point at that dependency, decide whether the change is observable to the dependent
+   (⇒ it must be invalidated). [field_is_impl] lets module-level edges detect changes to
+   inline/macro/@:generic fields (whose bodies are now part of the header). The diff is computed
+   ahead of time (in the pre-phase, where both the cached old header and the freshly-typed new one
+   are available), so the check never needs the live module objects. *)
+let changes_observable ~field_is_impl changes edges =
 	changes <> [] && List.exists (edge_observes_changes ~field_is_impl changes) edges
+
+let dep_change_observable ~field_is_impl old_header new_header edges =
+	changes_observable ~field_is_impl (header_diff old_header new_header) edges
 
 (* ---------------------------------------------------------------------- *)
 (* Serialization                                                           *)
