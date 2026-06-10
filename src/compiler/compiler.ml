@@ -268,10 +268,13 @@ let check_defines com =
    headers to spare dependents whose used signatures did not change. Compile errors are ignored
    here: a genuine error in a reachable module resurfaces in the main pass below. *)
 let retype_dirty_frontier com tctx =
+	let dbg = Define.raw_defined com.defines "hxb.header_stats" in
 	match ServerCache.collect_dirty_frontier com with
 	| [] ->
-		()
+		if dbg then Printf.eprintf "[header-invalidation] frontier: 0 modules\n%!"
 	| paths ->
+		if dbg then Printf.eprintf "[header-invalidation] frontier: %d modules [%s]\n%!"
+			(List.length paths) (String.concat ", " (List.map s_type_path paths));
 		List.iter (fun mpath ->
 			(try
 				ignore(tctx.Typecore.g.Typecore.do_load_module tctx mpath null_pos)
@@ -286,9 +289,10 @@ let retype_dirty_frontier com tctx =
 		List.iter (fun mpath ->
 			try
 				let m = com.module_lut#find mpath in
-				m.m_extra.m_header <- Some (ModuleHeader.module_header_of m)
+				m.m_extra.m_header <- Some (ModuleHeader.module_header_of m);
+				if dbg then Printf.eprintf "[header-invalidation] frontier typed: %s (header set)\n%!" (s_type_path mpath)
 			with Not_found ->
-				()
+				if dbg then Printf.eprintf "[header-invalidation] frontier MISSING from lut: %s\n%!" (s_type_path mpath)
 		) paths
 
 (** Creates the typer context and types [classes] into it. *)

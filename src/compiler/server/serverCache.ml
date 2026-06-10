@@ -176,7 +176,7 @@ let reset_spare_stats () =
 (* Opt-in diagnostic (-D hxb-header-stats); kept off the normal stderr so it can't trip
    assertSilence in the test suite. *)
 let dump_spare_stats com =
-	if Define.raw_defined com.defines "hxb-header-stats" then
+	if Define.raw_defined com.defines "hxb.header_stats" then
 		Printf.eprintf "[header-invalidation] spared=%d observed=%d | conservative: no-old=%d no-new=%d no-edges=%d\n%!"
 			spare_stats.sp_spared spare_stats.sp_observed spare_stats.sp_no_old spare_stats.sp_no_new spare_stats.sp_no_edges
 
