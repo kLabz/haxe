@@ -155,7 +155,16 @@ class CsSafeTypeBuilding extends TestCase {
 
 		runHaxeJson(args, ServerMethods.Invalidate, {file: new FsPath("Foo.hx")});
 		runHaxe(args);
+		#if header_invalidation
+		// Foo (the @:genericBuild base) is empty; a content-free invalidate leaves its header
+		// unchanged, so header invalidation soundly reuses the generic instances. Runtime output
+		// is unchanged (asserted below).
+		assertReuse("Main");
+		assertReuse("Bar");
+		assertReuse("Baz");
+		#else
 		assertBuilt(["Main", "Bar", "Baz"]);
+		#end
 		assertResult(target);
 
 		runHaxeJson(args, ServerMethods.Invalidate, {file: new FsPath("Macro.macro.hx")});

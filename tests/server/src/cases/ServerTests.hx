@@ -49,7 +49,12 @@ class ServerTests extends TestCase {
 		runHaxe(args);
 		runHaxeJson([], ServerMethods.Invalidate, {file: new FsPath("Dependency.hx")});
 		runHaxe(args);
+		#if header_invalidation
+		// Content-free invalidate leaves Dependency's header unchanged, so the dependent is spared.
+		assertReuse("WithDependency");
+		#else
 		assertSkipping("WithDependency", DependencyDirty("Dependency - Tainted server/invalidate"));
+		#end
 		// assertNotCacheModified("Dependency");
 		runHaxe(args);
 		assertReuse("Dependency");
