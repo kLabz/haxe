@@ -51,6 +51,7 @@ type chunk_kind =
 	| AFD (* abstract fields *)
 	| EOF (* end of fields *)
 	| EXD (* class field expressions *)
+	| MHD (* module header (phase 1 structured signature) *)
 	| EOM (* end of module *)
 
 type cached_chunk = chunk_kind * bytes
@@ -92,6 +93,7 @@ let string_of_chunk_kind = function
 	| AFD -> "AFD"
 	| EOF -> "EOF"
 	| EXD -> "EXD"
+	| MHD -> "MHD"
 	| EOM -> "EOM"
 
 let chunk_kind_of_string = function
@@ -119,6 +121,7 @@ let chunk_kind_of_string = function
 	| "AFD" -> AFD
 	| "EOF" -> EOF
 	| "EXD" -> EXD
+	| "MHD" -> MHD
 	| "EOM" -> EOM
 	| name -> raise (HxbFailure ("Invalid chunk name: " ^ name))
 
@@ -126,7 +129,7 @@ let error (s : string) =
 	Printf.eprintf "[error] %s\n" s;
 	raise (HxbFailure s)
 
-let hxb_version = 1
+let hxb_version = 2
 
 let write_header ch =
 	IO.nwrite_string ch "hxb";

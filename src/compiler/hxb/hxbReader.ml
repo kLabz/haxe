@@ -1905,6 +1905,11 @@ class hxb_reader
 			)
 		))
 
+	method read_mhd =
+		let length = read_uleb128 ch in
+		let data = Bytes.unsafe_to_string (read_bytes ch length) in
+		current_module.m_extra.m_header <- Some (ModuleHeader.decode current_module.m_path data)
+
 	method read_imports =
 		let length = read_uleb128 ch in
 		for _ = 0 to length - 1 do
@@ -2060,6 +2065,8 @@ class hxb_reader
 			()
 		| EXD ->
 			self#read_exd;
+		| MHD ->
+			self#read_mhd;
 		| EOM ->
 			incr stats.modules_fully_restored;
 

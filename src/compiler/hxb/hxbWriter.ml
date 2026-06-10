@@ -459,7 +459,7 @@ module HxbWriter = struct
 		let initial_size = match kind with
 			| EOT | EOF | EOM -> 0
 			| MDF -> 16
-			| MTF | IMP | CLR | END | ABD | ENR | ABR | TDR | EFR | CFR | AFD -> 64
+			| MTF | IMP | CLR | END | ABD | ENR | ABR | TDR | EFR | CFR | AFD | MHD -> 64
 			| OFR | OFD | OBD | CLD | TDD | EFD -> 128
 			| STR | DOC -> 256
 			| CFD | EXD -> 512
@@ -2294,6 +2294,18 @@ module HxbWriter = struct
 					write_path writer path
 				) imports
 			end;
+		end;
+
+		begin
+			(* Module header (phase 1): the module is fully typed here, so snapshot its structured
+			   signature and serialize it so it survives the hxb round-trip without recomputation.
+			   The header carries its own self-contained encoding (kept out of the string pool). *)
+			let header = match m.m_extra.m_header with
+				| Some h -> h
+				| None -> ModuleHeader.module_header_of m
+			in
+			start_chunk writer MHD;
+			Chunk.write_bytes_length_prefixed writer.chunk (Bytes.unsafe_of_string (ModuleHeader.encode header))
 		end;
 
 		start_chunk writer EOT;

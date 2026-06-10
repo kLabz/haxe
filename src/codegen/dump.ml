@@ -291,7 +291,7 @@ let dump_headers com =
 	let headers_path = [com.part_scope.dump_config.dump_path;target_name;"headers"] in
 	let buf,close = create_dumpfile [] headers_path in
 	let print fmt = Printf.kprintf (fun s -> Buffer.add_string buf s) fmt in
-	let n_modules = ref 0 and n_decls = ref 0 and n_fields = ref 0 and n_nondet = ref 0 in
+	let n_modules = ref 0 and n_decls = ref 0 and n_fields = ref 0 and n_nondet = ref 0 and n_rt = ref 0 and n_rtbad = ref 0 in
 	let modules = List.sort (fun a b -> compare a.m_path b.m_path) com.Common.modules in
 	List.iter (fun m ->
 		incr n_modules;
@@ -304,20 +304,30 @@ let dump_headers com =
 			print "!! NON-DETERMINISTIC %s: %s\n" (s_type_path m.m_path)
 				(String.concat ", " (List.map ModuleHeader.s_header_change nondet))
 		end;
+		(* Serialization fidelity: encode then decode (same stage, same header) must round-trip
+		   exactly. This isolates the (de)serializer from pipeline-state differences. *)
+		incr n_rt;
+		let rt = ModuleHeader.decode m.m_path (ModuleHeader.encode h) in
+		let d = ModuleHeader.header_diff h rt in
+		if d <> [] then begin
+			incr n_rtbad;
+			print "!! SERIALIZE ROUNDTRIP MISMATCH %s: %s\n" (s_type_path m.m_path)
+				(String.concat ", " (List.map ModuleHeader.s_header_change d))
+		end;
 		print "module %s:\n" (s_type_path m.m_path);
-		let decls = PMap.foldi (fun name decl acc -> (name,decl) :: acc) h.ModuleHeader.mh_decls [] in
+		let decls = PMap.foldi (fun name decl acc -> (name,decl) :: acc) h.mh_decls [] in
 		let decls = List.sort (fun (a,_) (b,_) -> compare a b) decls in
 		List.iter (fun (name,decl) ->
 			incr n_decls;
-			print "  %s\n    struct: %s\n" name decl.ModuleHeader.hd_struct;
-			let fields = PMap.foldi (fun k v acc -> (k,v) :: acc) decl.ModuleHeader.hd_fields [] in
+			print "  %s\n    struct: %s\n" name decl.hd_struct;
+			let fields = PMap.foldi (fun k v acc -> (k,v) :: acc) decl.hd_fields [] in
 			let fields = List.sort (fun (a,_) (b,_) -> compare a b) fields in
 			List.iter (fun (k,v) -> incr n_fields; print "    %s = %s\n" k v) fields
 		) decls
 	) modules;
 	close ();
-	print_endline (Printf.sprintf "[dump-headers] %d modules, %d type decls, %d fields, %d non-deterministic"
-		!n_modules !n_decls !n_fields !n_nondet);
+	print_endline (Printf.sprintf "[dump-headers] %d modules, %d type decls, %d fields, %d non-deterministic | serialize round-trip: %d checked, %d mismatch"
+		!n_modules !n_decls !n_fields !n_nondet !n_rt !n_rtbad);
 	flush stdout
 
 let maybe_generate_dump com stage =

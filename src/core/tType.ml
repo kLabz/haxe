@@ -65,6 +65,22 @@ type cache_bound_object =
 	| IncludeFile of string * string
 	| Message of Message.t
 
+(* Module headers (phase 1): a structured, body-free snapshot of a module's typed signature,
+   the unit invalidation diffs. See ModuleHeader for construction/diffing. The leaf is a canonical
+   signature string for now (so headers diff field by field, including one from a previous
+   session); the structured shape carries forward to phase 2 where the leaf becomes a lazy link. *)
+type header_entry = string
+
+type header_decl = {
+	hd_struct : string;                          (* canonical non-field structural signature *)
+	hd_fields : (string,header_entry) PMap.t;    (* field key -> canonical signature *)
+}
+
+type module_header = {
+	mh_path : path;
+	mh_decls : (string,header_decl) PMap.t;      (* type tail name -> its header *)
+}
+
 type t =
 	| TMono of tmono
 	| TEnum of tenum * tparams
@@ -483,6 +499,9 @@ and module_def_extra = {
 	mutable m_kind : module_kind;
 	mutable m_cache_bound_objects : cache_bound_object DynArray.t;
 	mutable m_features : (string,bool) Hashtbl.t;
+	(* Structured signature snapshot (phase 1). Generated post-typing / restored from hxb;
+	   [None] until computed (consumers may build it on demand via [ModuleHeader.module_header_of]). *)
+	mutable m_header : module_header option;
 }
 
 and class_field_ref_kind =

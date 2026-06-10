@@ -20,24 +20,9 @@ open Ast
 open TType
 open TFunctions
 
-(* A single signature entry: the canonical signature of one field / constructor. *)
-type header_entry = string
-
-type header_decl = {
-	(* Tag distinguishing class/enum/typedef/abstract plus the decl's structural shape
-	   (kind, params, super/implements, underlying, from/to, flags, ...) — everything that
-	   is NOT a per-field signature. A change here is a structural change to the whole decl. *)
-	hd_struct : string;
-	(* Per-field/constructor signatures, keyed so statics, members, the constructor and enum
-	   constructors never collide ("i:" member, "s:" static, "c:" constructor, "e:" enum). *)
-	hd_fields : (string, header_entry) PMap.t;
-}
-
-type module_header = {
-	mh_path : path;
-	(* Type name -> its header. Keyed by the type's tail name (unique within a module). *)
-	mh_decls : (string, header_decl) PMap.t;
-}
+(* The [module_header] / [header_decl] / [header_entry] types live in TType so that
+   [module_def_extra] can hold one ([m_header]). Field keys never collide: "i:" member,
+   "s:" static, "c:" constructor, "e:" enum constructor. *)
 
 (* ---------------------------------------------------------------------- *)
 (* Canonical signature printing                                            *)
@@ -337,3 +322,58 @@ let header_diff old_header new_header =
 
 let headers_equal old_header new_header =
 	header_diff old_header new_header = []
+
+(* ---------------------------------------------------------------------- *)
+(* Serialization                                                           *)
+
+(* Self-contained binary encoding (length-prefixed strings, little-endian u32 counts/lengths).
+   The header owns its own format rather than going through the hxb string pool: the leaves are
+   mostly-unique signature strings that would only bloat the shared pool. [mh_path] is not stored
+   (the reader already knows the module path) so [decode] takes it explicitly. *)
+let encode h =
+	let b = Buffer.create 256 in
+	let add_int n =
+		Buffer.add_char b (Char.chr (n land 0xff));
+		Buffer.add_char b (Char.chr ((n asr 8) land 0xff));
+		Buffer.add_char b (Char.chr ((n asr 16) land 0xff));
+		Buffer.add_char b (Char.chr ((n asr 24) land 0xff))
+	in
+	let add_str s = add_int (String.length s); Buffer.add_string b s in
+	let sorted pm = List.sort (fun (a,_) (b,_) -> compare a b) (PMap.foldi (fun k v acc -> (k,v) :: acc) pm []) in
+	let decls = sorted h.mh_decls in
+	add_int (List.length decls);
+	List.iter (fun (name,decl) ->
+		add_str name;
+		add_str decl.hd_struct;
+		let fields = sorted decl.hd_fields in
+		add_int (List.length fields);
+		List.iter (fun (k,sg) -> add_str k; add_str sg) fields
+	) decls;
+	Buffer.contents b
+
+let decode mh_path data =
+	let pos = ref 0 in
+	let get_int () =
+		let n =
+			(Char.code data.[!pos]) lor (Char.code data.[!pos+1] lsl 8)
+			lor (Char.code data.[!pos+2] lsl 16) lor (Char.code data.[!pos+3] lsl 24)
+		in
+		pos := !pos + 4;
+		n
+	in
+	let get_str () = let n = get_int () in let s = String.sub data !pos n in pos := !pos + n; s in
+	let ndecls = get_int () in
+	let mh_decls = ref PMap.empty in
+	for _ = 1 to ndecls do
+		let name = get_str () in
+		let hd_struct = get_str () in
+		let nf = get_int () in
+		let hd_fields = ref PMap.empty in
+		for _ = 1 to nf do
+			let k = get_str () in
+			let sg = get_str () in
+			hd_fields := PMap.add k sg !hd_fields
+		done;
+		mh_decls := PMap.add name { hd_struct; hd_fields = !hd_fields } !mh_decls
+	done;
+	{ mh_path; mh_decls = !mh_decls }
