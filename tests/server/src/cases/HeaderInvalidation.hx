@@ -36,6 +36,12 @@ class HeaderInvalidation extends TestCase {
 		var args = ["-main", "MainInline", "--no-output", "-js", "no.js", "-D", "hxb.header-invalidation"];
 		runHaxe(args);
 
+		// Content-free invalidate of an inline-field module: the impl-field body rendering must be
+		// stable across compiles, so the header is identical and the caller is spared.
+		runHaxeJson([], ServerMethods.Invalidate, {file: new FsPath("DepInline.hx")});
+		runHaxe(args);
+		assertReuse("MainInline");
+
 		vfs.putContent("DepInline.hx", getTemplate("HeaderInvalidation/DepInline.hx").replace("return 1", "return 2"));
 		runHaxeJson([], ServerMethods.Invalidate, {file: new FsPath("DepInline.hx")});
 		runHaxe(args);
