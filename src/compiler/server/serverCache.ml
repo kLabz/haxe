@@ -164,13 +164,14 @@ type spare_stats = {
 	mutable sp_observed : int;      (* invalidated: header diff observed in a used field *)
 	mutable sp_no_delta : int;      (* conservative: dependency not re-typed this round (no diff) *)
 	mutable sp_no_edges : int;      (* conservative: no field-dep edges to the dependency *)
+	mutable sp_sign_mismatch : int; (* no-delta where the path IS a frontier module but the sign differs *)
 }
 
-let spare_stats = { sp_spared = 0; sp_observed = 0; sp_no_delta = 0; sp_no_edges = 0 }
+let spare_stats = { sp_spared = 0; sp_observed = 0; sp_no_delta = 0; sp_no_edges = 0; sp_sign_mismatch = 0 }
 
 let reset_spare_stats () =
 	spare_stats.sp_spared <- 0; spare_stats.sp_observed <- 0;
-	spare_stats.sp_no_delta <- 0; spare_stats.sp_no_edges <- 0
+	spare_stats.sp_no_delta <- 0; spare_stats.sp_no_edges <- 0; spare_stats.sp_sign_mismatch <- 0
 
 (* Per-compile record, keyed by (signature, module path), of the header [changes] for each module
    the frontier pre-phase re-typed, together with that re-typed [module_def] (used to tell whether a
@@ -178,15 +179,17 @@ let reset_spare_stats () =
    header and the freshly-typed new one are in hand — and consulted during the dependency check, so
    the check never relies on [module_lut] (which is empty at that point). Reset each compile. *)
 let header_deltas : (Digest.t * path, ModuleHeader.header_change list * module_def) Hashtbl.t = Hashtbl.create 0
+(* Diagnostic: path -> signature(s) of frontier modules, to detect (sign,path) key mismatches. *)
+let header_delta_paths : (path, Digest.t) Hashtbl.t = Hashtbl.create 0
 
-let reset_header_deltas () = Hashtbl.clear header_deltas
+let reset_header_deltas () = Hashtbl.clear header_deltas; Hashtbl.clear header_delta_paths
 
 (* Opt-in diagnostic (-D hxb.header_stats); kept off the normal stderr so it can't trip
    assertSilence in the test suite. *)
 let dump_spare_stats com =
 	if Define.raw_defined com.defines "hxb.header_stats" then
-		Printf.eprintf "[header-invalidation] spared=%d observed=%d | conservative: no-delta=%d no-edges=%d | frontier diffed=%d\n%!"
-			spare_stats.sp_spared spare_stats.sp_observed spare_stats.sp_no_delta spare_stats.sp_no_edges (Hashtbl.length header_deltas)
+		Printf.eprintf "[header-invalidation] spared=%d observed=%d | conservative: no-delta=%d (sign-mismatch=%d) no-edges=%d | frontier diffed=%d\n%!"
+			spare_stats.sp_spared spare_stats.sp_observed spare_stats.sp_no_delta spare_stats.sp_sign_mismatch spare_stats.sp_no_edges (Hashtbl.length header_deltas)
 
 (* Called by the frontier pre-phase once a changed module has been fully re-typed: diff its fresh
    header against the one persisted in the cache by the previous compile, store the fresh header on
@@ -205,7 +208,8 @@ let note_retyped_module com m =
 			() (* no baseline to diff against: dependents stay conservative *)
 		| Some old_header ->
 			let changes = ModuleHeader.header_diff old_header new_header in
-			Hashtbl.replace header_deltas (sign,m.m_path) (changes,m)
+			Hashtbl.replace header_deltas (sign,m.m_path) (changes,m);
+			Hashtbl.replace header_delta_paths m.m_path sign
 	end
 
 (* Header-based spare decision (phase 1, opt-in via [hxb.header-invalidation]). [m_extra] is the
@@ -219,7 +223,15 @@ let dependency_change_observable com m_extra sign mpath =
 		true
 	else match Hashtbl.find_opt header_deltas (sign,mpath) with
 	| None ->
-		spare_stats.sp_no_delta <- spare_stats.sp_no_delta + 1; true
+		spare_stats.sp_no_delta <- spare_stats.sp_no_delta + 1;
+		(match Hashtbl.find_opt header_delta_paths mpath with
+		| Some stored when stored <> sign ->
+			spare_stats.sp_sign_mismatch <- spare_stats.sp_sign_mismatch + 1;
+			if Define.raw_defined com.defines "hxb.header_stats" && spare_stats.sp_sign_mismatch <= 3 then
+				Printf.eprintf "[header-invalidation] sign mismatch for %s: stored=%s lookup=%s\n%!"
+					(s_type_path mpath) (Digest.to_hex stored) (Digest.to_hex sign)
+		| _ -> ());
+		true
 	| Some (changes,m_new) ->
 		let edges = PMap.fold (fun edge acc ->
 			if edge.dep_tgt_path = mpath && edge.dep_tgt_sign = sign then edge :: acc else acc
