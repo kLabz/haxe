@@ -181,15 +181,20 @@ let reset_spare_stats () =
 let header_deltas : (Digest.t * path, ModuleHeader.header_change list * module_def) Hashtbl.t = Hashtbl.create 0
 (* Diagnostic: path -> signature(s) of frontier modules, to detect (sign,path) key mismatches. *)
 let header_delta_paths : (path, Digest.t) Hashtbl.t = Hashtbl.create 0
+(* Diagnostic: distinct paths that hit the no-delta (conservative) branch. *)
+let header_no_delta_sample : (path, unit) Hashtbl.t = Hashtbl.create 0
 
-let reset_header_deltas () = Hashtbl.clear header_deltas; Hashtbl.clear header_delta_paths
+let reset_header_deltas () =
+	Hashtbl.clear header_deltas; Hashtbl.clear header_delta_paths; Hashtbl.clear header_no_delta_sample
 
 (* Opt-in diagnostic (-D hxb.header_stats); kept off the normal stderr so it can't trip
    assertSilence in the test suite. *)
 let dump_spare_stats com =
 	if Define.raw_defined com.defines "hxb.header_stats" then
-		Printf.eprintf "[header-invalidation] spared=%d observed=%d | conservative: no-delta=%d (sign-mismatch=%d) no-edges=%d | frontier diffed=%d\n%!"
-			spare_stats.sp_spared spare_stats.sp_observed spare_stats.sp_no_delta spare_stats.sp_sign_mismatch spare_stats.sp_no_edges (Hashtbl.length header_deltas)
+		Printf.eprintf "[header-invalidation] spared=%d observed=%d | conservative: no-delta=%d (sign-mismatch=%d) no-edges=%d | frontier diffed=%d | distinct no-delta deps=%d\n%!"
+			spare_stats.sp_spared spare_stats.sp_observed spare_stats.sp_no_delta spare_stats.sp_sign_mismatch spare_stats.sp_no_edges (Hashtbl.length header_deltas) (Hashtbl.length header_no_delta_sample);
+		let sample = Hashtbl.fold (fun p () acc -> if List.length acc < 25 then s_type_path p :: acc else acc) header_no_delta_sample [] in
+		Printf.eprintf "[header-invalidation] no-delta sample: %s\n%!" (String.concat ", " sample)
 
 (* Called by the frontier pre-phase once a changed module has been fully re-typed: diff its fresh
    header against the one persisted in the cache by the previous compile, store the fresh header on
@@ -224,6 +229,7 @@ let dependency_change_observable com m_extra sign mpath =
 	else match Hashtbl.find_opt header_deltas (sign,mpath) with
 	| None ->
 		spare_stats.sp_no_delta <- spare_stats.sp_no_delta + 1;
+		if not (Hashtbl.mem header_no_delta_sample mpath) then Hashtbl.replace header_no_delta_sample mpath ();
 		(match Hashtbl.find_opt header_delta_paths mpath with
 		| Some stored when stored <> sign ->
 			spare_stats.sp_sign_mismatch <- spare_stats.sp_sign_mismatch + 1;
