@@ -41,4 +41,18 @@ class HeaderInvalidation extends TestCase {
 		runHaxe(args);
 		Assert.isFalse(hasMessage("reusing MainInline"));
 	}
+
+	// @:generic functions are specialized into callers, so a body change (signature unchanged) must
+	// invalidate the call site even though the header signature is identical.
+	function testGenericBody() {
+		vfs.putContent("DepGeneric.hx", getTemplate("HeaderInvalidation/DepGeneric.hx"));
+		vfs.putContent("MainGeneric.hx", getTemplate("HeaderInvalidation/MainGeneric.hx"));
+		var args = ["-main", "MainGeneric", "--no-output", "-js", "no.js", "-D", "hxb.header-invalidation"];
+		runHaxe(args);
+
+		vfs.putContent("DepGeneric.hx", getTemplate("HeaderInvalidation/DepGeneric.hx").replace('"1:"', '"2:"'));
+		runHaxeJson([], ServerMethods.Invalidate, {file: new FsPath("DepGeneric.hx")});
+		runHaxe(args);
+		Assert.isFalse(hasMessage("reusing MainGeneric"));
+	}
 }

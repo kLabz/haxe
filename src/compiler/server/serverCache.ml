@@ -200,6 +200,15 @@ let collect_dirty_frontier com =
 	else begin
 		let cc = CommonCache.get_cache com in
 		let acc = ref [] in
+		(* Pre-typing a module runs its @:build / @:genericBuild macros ahead of the normal pass, which
+		   can reorder order-sensitive type generation. We therefore keep macro-involved modules out of
+		   the pre-phase (they fall back to the normal conservative path — sound, just not spared). *)
+		let is_macro_involved m_extra =
+			PMap.fold (fun dep acc -> acc || (match dep.md_origin with
+				| MDepFromMacro | MDepFromMacroDefine -> true
+				| _ -> false
+			)) m_extra.m_deps false
+		in
 		let consider m_path m_extra =
 			match m_extra.m_kind with
 			| MCode | MMacro ->
@@ -209,7 +218,7 @@ let collect_dirty_frontier com =
 					Path.file_extension file = "hx"
 					&& (try file_time file <> m_extra.m_time with _ -> false)
 				in
-				if tainted || file_changed then acc := m_path :: !acc
+				if (tainted || file_changed) && not (is_macro_involved m_extra) then acc := m_path :: !acc
 			| MFake | MImport | MExtern ->
 				()
 		in
