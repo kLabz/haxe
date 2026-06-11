@@ -181,8 +181,8 @@ let reset_spare_stats () =
 let header_deltas : (Digest.t * path, ModuleHeader.header_change list * module_def) Hashtbl.t = Hashtbl.create 0
 (* Diagnostic: path -> signature(s) of frontier modules, to detect (sign,path) key mismatches. *)
 let header_delta_paths : (path, Digest.t) Hashtbl.t = Hashtbl.create 0
-(* Diagnostic: distinct paths that hit the no-delta (conservative) branch. *)
-let header_no_delta_sample : (path, unit) Hashtbl.t = Hashtbl.create 0
+(* Diagnostic: distinct paths that hit the no-delta (conservative) branch -> why they were dirty. *)
+let header_no_delta_sample : (path, string) Hashtbl.t = Hashtbl.create 0
 
 let reset_header_deltas () =
 	Hashtbl.clear header_deltas; Hashtbl.clear header_delta_paths; Hashtbl.clear header_no_delta_sample
@@ -193,7 +193,7 @@ let dump_spare_stats com =
 	if Define.raw_defined com.defines "hxb.header_stats" then
 		Printf.eprintf "[header-invalidation] spared=%d observed=%d | conservative: no-delta=%d (sign-mismatch=%d) no-edges=%d | frontier diffed=%d | distinct no-delta deps=%d\n%!"
 			spare_stats.sp_spared spare_stats.sp_observed spare_stats.sp_no_delta spare_stats.sp_sign_mismatch spare_stats.sp_no_edges (Hashtbl.length header_deltas) (Hashtbl.length header_no_delta_sample);
-		let sample = Hashtbl.fold (fun p () acc -> if List.length acc < 25 then s_type_path p :: acc else acc) header_no_delta_sample [] in
+		let sample = Hashtbl.fold (fun p reason acc -> if List.length acc < 25 then (Printf.sprintf "%s<%s>" (s_type_path p) reason) :: acc else acc) header_no_delta_sample [] in
 		Printf.eprintf "[header-invalidation] no-delta sample: %s\n%!" (String.concat ", " sample)
 
 (* Called by the frontier pre-phase once a changed module has been fully re-typed: diff its fresh
@@ -223,13 +223,14 @@ let note_retyped_module com m =
 
    Conservatively returns true whenever the dependency was not re-typed this round (so we have no
    fresh header to diff) or the dependent records no field-granular edge to it. *)
-let dependency_change_observable com m_extra sign mpath =
+let dependency_change_observable com m_extra sign mpath reason =
 	if not (Define.defined com.defines Define.HxbHeaderInvalidation) then
 		true
 	else match Hashtbl.find_opt header_deltas (sign,mpath) with
 	| None ->
 		spare_stats.sp_no_delta <- spare_stats.sp_no_delta + 1;
-		if not (Hashtbl.mem header_no_delta_sample mpath) then Hashtbl.replace header_no_delta_sample mpath ();
+		if not (Hashtbl.mem header_no_delta_sample mpath) then
+			Hashtbl.replace header_no_delta_sample mpath (Printer.s_module_skip_reason reason);
 		(match Hashtbl.find_opt header_delta_paths mpath with
 		| Some stored when stored <> sign ->
 			spare_stats.sp_sign_mismatch <- spare_stats.sp_sign_mismatch + 1;
@@ -265,15 +266,11 @@ let collect_dirty_frontier com =
 		reset_header_deltas ();
 		let cc = CommonCache.get_cache com in
 		let acc = ref [] in
-		(* Pre-typing a module runs its @:build / @:genericBuild macros ahead of the normal pass, which
-		   can reorder order-sensitive type generation. We therefore keep macro-involved modules out of
-		   the pre-phase (they fall back to the normal conservative path — sound, just not spared). *)
-		let is_macro_involved m_extra =
-			PMap.fold (fun dep acc -> acc || (match dep.md_origin with
-				| MDepFromMacro | MDepFromMacroDefine -> true
-				| _ -> false
-			)) m_extra.m_deps false
-		in
+		(* Every dirty source module (its own file changed, or it was tainted) must be re-typed and
+		   diffed so its dependents can be spared. Macro-built modules are NOT excluded: skipping them
+		   left their (often many) dependents permanently conservative, which is exactly what defeated
+		   the win. Pre-typing them re-runs their @:build/@:genericBuild macros earlier than the normal
+		   pass, which only reorders generated-type bookkeeping, not output. *)
 		let consider m_path m_extra =
 			match m_extra.m_kind with
 			| MCode | MMacro ->
@@ -283,7 +280,7 @@ let collect_dirty_frontier com =
 					Path.file_extension file = "hx"
 					&& (try file_time file <> m_extra.m_time with _ -> false)
 				in
-				if (tainted || file_changed) && not (is_macro_involved m_extra) then acc := m_path :: !acc
+				if tainted || file_changed then acc := m_path :: !acc
 			| MFake | MImport | MExtern ->
 				()
 		in
@@ -391,7 +388,7 @@ let check_module sctx com m_path m_extra p =
 				| Some reason ->
 					(* The dependency is dirty, but a dirty dependency is only a reason to invalidate
 					   if its *signature* (header) changed in a way this module can observe. *)
-					if dependency_change_observable com m_extra sign mpath then
+					if dependency_change_observable com m_extra sign mpath reason then
 						raise (Dirty (DependencyDirty(mpath,reason)))
 			) m_extra.m_deps
 		in

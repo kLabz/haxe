@@ -150,7 +150,15 @@ class CsSafeTypeBuilding extends TestCase {
 
 		runHaxeJson(args, ServerMethods.Invalidate, {file: new FsPath("Bar.hx")});
 		runHaxe(args);
+		#if header_invalidation
+		// Main only imports Bar (it never uses Bar's signature), so a content-free invalidate of Bar
+		// leaves the part of Bar's header that Main observes unchanged -> Main is spared. Bar and the
+		// Foo<Bar> user Baz still rebuild.
+		assertReuse("Main");
+		assertBuilt(["Bar", "Baz"]);
+		#else
 		assertBuilt(["Main", "Bar", "Baz"]);
+		#end
 		assertResult(target);
 
 		runHaxeJson(args, ServerMethods.Invalidate, {file: new FsPath("Foo.hx")});
