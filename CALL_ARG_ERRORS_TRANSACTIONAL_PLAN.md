@@ -70,15 +70,28 @@ rejection. Effects are preferred precisely because the re-rooting becomes unforg
 
 ## Order of work
 
-1. [down payment] Monomorph transaction helper + apply at the optional-skip boundary. Build, run
-   `tests/misc/eval` + the unit macro target to confirm no regression.
-2. Introduce the `Diagnostic` effect and route the three emission entry points through it; top-level
-   handler reproduces current behavior (no functional change yet).
-3. Buffering handler per speculative attempt; re-rooting handler at `lazy_type`/pass. Remove
-   `reset/add/rollback_call_arg_body_messages` and `rollback_messages`.
-4. Validate against hxcoro/utest (the code the deferred POC broke) + full server suite.
+1. [DONE] Monomorph transaction helper + apply at the optional-skip boundary (commit 4480551).
+2. [DONE] Scoped capture instead of effects. A `message_capture` buffer on `part_scope`, honoured by
+   `add_diagnostics_message` + `CompilerMessage.add_message` (and the deferred `has_error`/fail-fast
+   in `default_error_handler`). `Common.activate_message_capture` installs it and the
+   `lazy_force_hook` (core, `tFunctions.ml`) that suspends it across a forced lazy.
+3. [DONE] The capture is scoped to the **function-literal body** (activated in `typer.ml` around
+   `type_function`, buffer held in `cac_body_capture`), matching the old `cac_body_messages` scope --
+   so surrounding argument-expression errors (e.g. building a referenced class) survive a skip.
+   callUnification commits on a kept argument and drops on an optional skip. Removed
+   `reset/add/call_arg_body_messages` and the global `rollback_messages`. Commit 3c2c66f.
+4. [DONE] Validated: misc 681/681, server suite 3488/3488 (links hxcoro), unit interp 11311/11311 --
+   no inference-order regression (the eager approach never reorders, unlike the deferred POC).
 
 ## Not solved here
 
 Attempt **ranking** when every attempt fails (which buffered attempt to surface — the `MaskStruct`
 group-C cases) is a separate, pre-existing rough edge.
+
+The **overload** variant of the body-error case (`OverloadBody`, still `.disabled`) is part of this
+same ranking problem. The non-overload path surfaces body errors cleanly via the capture, but in
+overloads body errors must keep propagating so they can disqualify a candidate during selection;
+the body error then reaches `arg_error` and gets the spurious "For function argument" wrapper.
+Reporting it cleanly needs overload-failure ranking (surface the structurally-best candidate's body
+error unwrapped), not a wider capture -- capturing body errors in overloads would wrongly let a
+candidate with a broken body win selection.
