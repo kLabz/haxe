@@ -152,34 +152,47 @@ let unify_call_args ctx el args r callp ?(call_field_p=callp) inline force_inlin
 			end
 		| e :: el,(name,opt,t) :: args ->
 			let might_skip = List.length el < List.length args in
-			reset_call_arg_body_messages ctx;
-			(* Make this argument attempt transactional: if it is abandoned (skipped optional arg, or
-			   default-bound after a body error), roll its monomorph bindings back so they don't
-			   corrupt later attempts. (Message rollback is still global here -- see
-			   CALL_ARG_ERRORS_TRANSACTIONAL_PLAN.md for the TLazy-safe replacement.) *)
+			(* Make this argument attempt transactional. If it is abandoned (an optional parameter is
+			   skipped) we roll its monomorph bindings back so they don't corrupt later attempts, and
+			   drop the function-literal body messages it captured. On any kept path those messages are
+			   committed. The capture is TLazy-safe: a lazy forced while typing the body re-roots its
+			   permanent diagnostics past the buffer (see Common.activate_message_capture). *)
+			let body_capture = reset_call_arg_body_capture ctx in
 			let restore_monos = monomorph_transaction ctx in
+			let committed = ref false in
+			let commit () = if not !committed then begin committed := true; commit_captured_messages ctx.com !body_capture end in
+			let drop () = committed := true in
 			begin try
-				let e = type_against name t e in
-				e :: loop el args
-			with
-				WithTypeError ul ->
-					if opt && might_skip then begin
-						begin match call_arg_body_messages ctx with
-						| [] -> ()
-						| body_msgs ->
-							rollback_messages ctx.com body_msgs
-						end;
-						restore_monos();
-						let e_def = skip name ul t in
-						e_def :: loop (e :: el) args
-					end else if call_arg_body_messages ctx <> [] && (match follow t with TFun _ -> false | _ -> true) then begin
-						restore_monos();
-						let e_def = default_value name t in
-						e_def :: loop el args
-					end else
-						match List.rev !skipped with
-						| [] -> arg_error ul name opt
-						| (s,ul) :: _ -> arg_error ul s true
+				begin try
+					let e = type_against name t e in
+					commit ();
+					e :: loop el args
+				with
+					WithTypeError ul ->
+						if opt && might_skip then begin
+							drop ();
+							restore_monos();
+							let e_def = skip name ul t in
+							e_def :: loop (e :: el) args
+						end else if !body_capture <> [] && (match follow t with TFun _ -> false | _ -> true) then begin
+							commit ();
+							restore_monos();
+							let e_def = default_value name t in
+							e_def :: loop el args
+						end else begin
+							commit ();
+							match List.rev !skipped with
+							| [] -> arg_error ul name opt
+							| (s,ul) :: _ -> arg_error ul s true
+						end
+				end
+			with exc ->
+				(* Any escaping exception: a non-WithTypeError error from type_against, or one from the
+				   continuation after commit/drop already ran. Default to committing the captured body
+				   messages so they survive (matching the previous behaviour); a no-op if we already
+				   committed or dropped. *)
+				commit ();
+				raise exc
 			end
 	in
 	let restore = enter_call_args ctx ~in_overload in

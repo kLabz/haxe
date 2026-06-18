@@ -345,10 +345,17 @@ let rec extends c csup =
 let add_descendant c descendant =
 	c.cl_descendants <- descendant :: c.cl_descendants
 
+(* Hook around the forcing of a waiting lazy type. The default just forces the thunk. The typer
+   installs a hook while a speculative message capture is active (see Common.activate_message_capture)
+   so that a lazy forced mid-attempt routes its memoized, permanent diagnostics straight to the
+   permanent message sink instead of into the droppable speculative buffer. Only the LWait branch
+   pays for this indirection; the memoized LAvailable/LProcessing fast paths are untouched. *)
+let lazy_force_hook : ((unit -> t) -> t) ref = ref (fun f -> f())
+
 let lazy_type f =
 	match !f with
 	| LAvailable t | LProcessing t -> t
-	| LWait f -> f()
+	| LWait f -> !lazy_force_hook f
 
 let lazy_available t = LAvailable t
 let lazy_processing t = LProcessing t

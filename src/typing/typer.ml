@@ -1262,28 +1262,24 @@ and type_local_function ctx_from kind f with_type want_coroutine p =
 	in
 	let e =
 		let old_in_call_args = ctx.f.in_call_args in
+		(* When typing a function literal passed as a call argument, type its body with in_call_args
+		   off so body errors are reported (rather than aborting the argument as a unification failure)
+		   and divert those messages into the argument's body-capture buffer, so callUnification can
+		   drop them if the argument is abandoned. In overloads we keep propagating so a body error
+		   simply fails the candidate. *)
 		let resets_call_args = old_in_call_args && not (in_overload_call_args ctx) in
 		if resets_call_args then ctx.f.in_call_args <- false;
-		let messages_before = ctx.com.part_scope.messages in
-		let e = Std.finally (fun () -> ctx.f.in_call_args <- old_in_call_args)
+		let deactivate_capture = match (if resets_call_args then call_arg_body_capture ctx else None) with
+			| Some buf -> activate_message_capture ctx.com buf
+			| None -> (fun () -> ())
+		in
+		Std.finally (fun () -> deactivate_capture (); ctx.f.in_call_args <- old_in_call_args)
 			(fun () ->
 				try TypeloadFunction.type_function ctx args rt f.f_expr ctx.f.in_display p
 				with Error err when resets_call_args ->
 					check_error ctx err;
 					mk (TBlock []) ctx.t.tvoid p
 			) ()
-		in
-		if resets_call_args then begin
-			let rec collect l =
-				if l == messages_before then []
-				else match l with
-					| [] -> raise Not_found
-					| m :: l -> m :: collect l
-			in
-			(try add_call_arg_body_messages ctx (collect ctx.com.part_scope.messages)
-			with Not_found -> ())
-		end;
-		e
 	in
 	let tf = {
 		tf_args = args#for_expr ctx;

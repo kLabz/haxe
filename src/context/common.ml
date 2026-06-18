@@ -255,6 +255,10 @@ type part_scope = {
 	mutable messages : Message.t list;
 	mutable has_error : bool;
 	mutable report_mode : report_mode;
+	(* When set, compiler messages that would be appended to [messages] are diverted into this buffer
+	   instead, so a speculative typing attempt (a skipped optional call argument, a losing overload
+	   candidate) can commit them on success or drop them on failure. See [activate_message_capture]. *)
+	mutable message_capture : Message.t list ref option;
 	compilation_step : int;
 	pass_debug_messages : string DynArray.t;
 	dump_config : DumpConfig.t;
@@ -836,10 +840,50 @@ let has_error_to_report com =
 	) com.part_scope.messages in
 	com.part_scope.has_error && (is_compilation com || has_reportable_message)
 
-let rollback_messages com msgs =
-	let messages = List.filter (fun cm -> not (List.memq cm msgs)) com.part_scope.messages in
-	com.part_scope.messages <- messages;
-	com.part_scope.has_error <- List.exists (fun cm -> Message.cm_severity cm = MessageSeverity.Error) messages
+(* Speculative message capture for function-literal argument bodies.
+
+   When a function literal is passed as a call argument, its body is typed eagerly. If the argument
+   is then abandoned (an optional parameter is skipped, so the literal is re-typed against a later
+   parameter or dropped) the body's errors must not be reported. The old mechanism let those errors
+   reach [com.part_scope.messages] and filtered them out afterwards by reference -- but a [TLazy]
+   forced while typing the body commits its memoized, permanent diagnostics into the same list, and
+   that global rollback would erase them for good.
+
+   Instead we *divert* body messages into a buffer ([activate_message_capture], honoured by
+   [add_diagnostics_message] and [CompilerMessage.add_message]): callUnification then either commits
+   the buffer (the argument is kept) or simply drops it (the argument is skipped), touching no global
+   state. Forcing a lazy must NOT route its diagnostics into the buffer (forcing is memoized, so they
+   would never be produced again): the installed [lazy_force_hook] suspends the capture for the
+   dynamic extent of the forced thunk, so a forced lazy's diagnostics land directly in the permanent
+   sink. The capture is scoped to the body only -- errors from the surrounding argument expression
+   (e.g. loading a referenced class) reach [messages] directly and survive a skip. *)
+let activate_message_capture com buf =
+	let old_capture = com.part_scope.message_capture in
+	let old_hook = !lazy_force_hook in
+	com.part_scope.message_capture <- Some buf;
+	lazy_force_hook := (fun f ->
+		let saved = com.part_scope.message_capture in
+		com.part_scope.message_capture <- None;
+		let r = (try f () with exc -> com.part_scope.message_capture <- saved; raise exc) in
+		com.part_scope.message_capture <- saved;
+		r
+	);
+	(fun () ->
+		com.part_scope.message_capture <- old_capture;
+		lazy_force_hook := old_hook
+	)
+
+(* Append captured messages (held newest-first) to whatever sink is now current, in chronological
+   order. Used when a captured argument is kept. *)
+let commit_captured_messages com (buf : Message.t list) =
+	List.iter (fun cm ->
+		match com.part_scope.message_capture with
+		| Some parent ->
+			parent := cm :: !parent
+		| None ->
+			if Message.cm_severity cm = MessageSeverity.Error then com.part_scope.has_error <- true;
+			com.part_scope.messages <- cm :: com.part_scope.messages
+	) (List.rev buf)
 
 let disable_report_mode com =
 	let old = com.part_scope.report_mode in
@@ -1092,8 +1136,13 @@ let hash f =
 	if Sys.word_size = 64 then Int32.to_int (Int32.shift_right (Int32.shift_left (Int32.of_int !h) 1) 1) else !h
 
 let add_diagnostics_message ?(depth = 0) ?(diagnostics_kind = MessageKind.DKCompilerMessage) com s p message_kind =
-	if message_kind_severity message_kind = MessageSeverity.Error then com.part_scope.has_error <- true;
-	com.part_scope.messages <- (make_diagnostic com.is_macro_context diagnostics_kind (JString s) p depth message_kind) :: com.part_scope.messages
+	let cm = make_diagnostic com.is_macro_context diagnostics_kind (JString s) p depth message_kind in
+	match com.part_scope.message_capture with
+	| Some buf ->
+		buf := cm :: !buf
+	| None ->
+		if message_kind_severity message_kind = MessageSeverity.Error then com.part_scope.has_error <- true;
+		com.part_scope.messages <- cm :: com.part_scope.messages
 
 let display_error_ext com err =
 	if is_diagnostics com then begin
