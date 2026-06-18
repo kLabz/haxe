@@ -53,6 +53,21 @@ API, with the *same* re-rooting discipline at `lazy_type`/pass entry. Less invas
 the reset is a discipline that can be forgotten — which is the class of bug that caused the original
 rejection. Effects are preferred precisely because the re-rooting becomes unforgettable.
 
+## Concrete integration points (verified)
+
+- **Emission chokepoints:** `Common.display_error_ext` (`common.ml:1098`) branches to
+  `add_diagnostics_message` (`common.ml:1094`, diagnostics mode) or `com.error_ext` (normal mode).
+  A com-side capture buffer would be honored here (and in `add_diagnostics_message`).
+- **Lazy forcing chokepoint:** `lazy_type` (`tFunctions.ml:348`) — only the `LWait f -> f()` branch
+  runs user typing. But `tFunctions` is core and has **no `com`**, so re-rooting can't read the
+  capture state directly. Add an indirection hook: `let lazy_force_hook = ref (fun f -> f())` in
+  core, called only on the `LWait` branch; the typer installs a hook that clears the active capture
+  buffer for the duration of `f()` (so a forced lazy's permanent diagnostics bypass any speculative
+  buffer). Keep `LAvailable`/`LProcessing` on the hot path untouched.
+- This is the same shape effects would give, done with a com-side buffer stack + one core hook. It
+  is performance-sensitive (lazy forcing is hot) and touches core error reporting, so it warrants
+  its own focused, well-tested change.
+
 ## Order of work
 
 1. [down payment] Monomorph transaction helper + apply at the optional-skip boundary. Build, run
