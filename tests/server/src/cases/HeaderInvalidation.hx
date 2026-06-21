@@ -19,12 +19,14 @@ class HeaderInvalidation extends TestCase {
 		vfs.putContent("Dep.hx", getTemplate("HeaderInvalidation/Dep.hx").replace("return 1", "return 2"));
 		runHaxeJson([], ServerMethods.Invalidate, {file: new FsPath("Dep.hx")});
 		runHaxe(args);
+		assertSuccess();
 		assertReuse("Main");
 
 		// Signature change: Dep.value now returns Float -> Main must be re-typed (not reused).
 		vfs.putContent("Dep.hx", getTemplate("HeaderInvalidation/Dep.hx").replace("value():Int", "value():Float"));
 		runHaxeJson([], ServerMethods.Invalidate, {file: new FsPath("Dep.hx")});
 		runHaxe(args);
+		assertSuccess();
 		Assert.isFalse(hasMessage("reusing Main"));
 	}
 
@@ -40,11 +42,13 @@ class HeaderInvalidation extends TestCase {
 		// stable across compiles, so the header is identical and the caller is spared.
 		runHaxeJson([], ServerMethods.Invalidate, {file: new FsPath("DepInline.hx")});
 		runHaxe(args);
+		assertSuccess();
 		assertReuse("MainInline");
 
 		vfs.putContent("DepInline.hx", getTemplate("HeaderInvalidation/DepInline.hx").replace("return 1", "return 2"));
 		runHaxeJson([], ServerMethods.Invalidate, {file: new FsPath("DepInline.hx")});
 		runHaxe(args);
+		assertSuccess();
 		Assert.isFalse(hasMessage("reusing MainInline"));
 	}
 
@@ -59,6 +63,7 @@ class HeaderInvalidation extends TestCase {
 		vfs.putContent("DepGeneric.hx", getTemplate("HeaderInvalidation/DepGeneric.hx").replace('"1:"', '"2:"'));
 		runHaxeJson([], ServerMethods.Invalidate, {file: new FsPath("DepGeneric.hx")});
 		runHaxe(args);
+		assertSuccess();
 		Assert.isFalse(hasMessage("reusing MainGeneric"));
 	}
 }
