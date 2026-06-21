@@ -289,26 +289,59 @@ let retype_dirty_frontier com tctx =
 		   under this (HeaderInvalidation passes); the remaining flag-on failures are partial restore not
 		   yet being structurally complete enough for a re-typed seed's peer references (increment 3). *)
 		let partial = Define.defined com.defines Define.HxbPrephasePartial in
+		(* Increment 3 (WIP, gated): swap a throwaway module_lut onto com for the duration of the
+		   pre-phase, seeded with what is already loaded (init-macro / display modules) so seeds can
+		   still resolve them. The pre-phase's re-typed seeds and restored peers land in the throwaway
+		   and are dropped on restore, so they never reach the main compile's module_lut / codegen;
+		   only header_deltas (recorded below, before the restore) are handed back. *)
+		let isolate = Define.defined com.defines Define.HxbPrephaseIsolate in
+		let saved_lut = com.module_lut in
+		if isolate then begin
+			let fresh = new module_lut in
+			saved_lut#iter (fun path m -> fresh#add path m);
+			com.module_lut <- fresh
+		end;
+		let restore_lut () = if isolate then com.module_lut <- saved_lut in
 		if partial then begin
 			ServerCache.prephase_partial_mode := true;
 			Hashtbl.clear ServerCache.prephase_partial_paths
 		end;
-		List.iter (fun mpath ->
-			(try ignore (tctx.Typecore.g.Typecore.do_load_module tctx mpath null_pos)
-			 with Error.Error _ | Error.Fatal_error _ -> ());
-			Typecore.flush_pass tctx.g PBuildClass "header-prephase"
-		) paths;
 		(try
-			Typecore.flush_pass tctx.g PFinal "header-prephase"
-		with Error.Error _ | Error.Fatal_error _ ->
-			());
-		(* Re-typing the frontier drags in its whole dirty closure (cyclic peers etc.); the outer
-		   cascade reaches the seeds *through* those peers, so record a fresh header for every module
-		   the pre-phase pulled in, not just the seeds. All of it is post-PFinal so inline cf_expr
-		   bodies are accurate. *)
-		ServerCache.record_prephase_closure com before;
+			List.iter (fun mpath ->
+				(try ignore (tctx.Typecore.g.Typecore.do_load_module tctx mpath null_pos)
+				 with Error.Error _ | Error.Fatal_error _ -> ());
+				Typecore.flush_pass tctx.g PBuildClass "header-prephase"
+			) paths;
+			(try
+				Typecore.flush_pass tctx.g PFinal "header-prephase"
+			with Error.Error _ | Error.Fatal_error _ ->
+				());
+			(* Re-typing the frontier drags in its whole dirty closure (cyclic peers etc.); the outer
+			   cascade reaches the seeds *through* those peers, so record a fresh header for every module
+			   the pre-phase pulled in, not just the seeds. All of it is post-PFinal so inline cf_expr
+			   bodies are accurate. *)
+			ServerCache.record_prephase_closure com before
+		with e ->
+			restore_lut ();
+			if partial then ServerCache.prephase_partial_mode := false;
+			raise e);
+		restore_lut ();
 		if partial then
 			ServerCache.prephase_partial_mode := false;
+		(* Step 2 (shared seed materialization): the isolated computation above produced only header
+		   deltas; its re-typed seeds live in the throwaway lut. A spared dependent in the main pass
+		   resolves its reference to a dirty seed eagerly (the seed is still MSBad/tainted in the cache),
+		   which dies with BadModule unless the seed is present in the SHARED lut. So re-type the dirty
+		   SEEDS only (not their whole closure) from source into the now-restored shared lut, with FULL
+		   peer restores. Cheap relative to the isolated phase: only the genuinely-edited seeds are
+		   re-typed; their dependencies are restored from the cache, not re-typed. *)
+		if isolate then begin
+			List.iter (fun mpath ->
+				(try ignore (tctx.Typecore.g.Typecore.do_load_module tctx mpath null_pos)
+				 with Error.Error _ | Error.Fatal_error _ -> ());
+				Typecore.flush_pass tctx.g PBuildClass "header-prephase-seed"
+			) paths
+		end;
 		if dbg then begin
 			let full = !(com.hxb_reader_stats.modules_fully_restored) - full0 in
 			let part = !(com.hxb_reader_stats.modules_partially_restored) - part0 in

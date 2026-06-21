@@ -336,7 +336,7 @@ and context = {
 	parser_cache : (string,(type_def * pos) list) lookup;
 	module_to_file : (path,ClassPaths.resolved_file) lookup;
 	overload_cache : ((path * string),(Type.t * tclass_field) list) lookup;
-	module_lut : module_lut;
+	mutable module_lut : module_lut;
 	module_nonexistent_lut : (path,bool) lookup;
 	fake_modules : (Path.UniqueKey.t,module_def) Hashtbl.t;
 	(* output *)

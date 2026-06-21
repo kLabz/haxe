@@ -100,6 +100,12 @@
 		"doc": "Phase 2: restore the header pre-phase's dependency peers signature-only (partial) and discard the throwaway closure afterwards, so computing an edited seed's header does not type the whole SCC's bodies."
 	},
 	{
+		"name": "HxbPrephaseIsolate",
+		"define": "hxb.prephase-isolate",
+		"signatureNeutral": true,
+		"doc": "Phase 2 increment 3 (WIP): run the header pre-phase in a throwaway module_lut swapped onto com, so its re-typed seeds and restored peers never reach the main compile's module_lut / codegen; only header_deltas are handed back."
+	},
+	{
 		"name": "DisableParallelism",
 		"define": "disable-parallelism",
 		"signatureNeutral": true,
