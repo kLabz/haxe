@@ -279,6 +279,11 @@ let retype_dirty_frontier com tctx =
 		   headers for what the pre-phase itself pulls in below. *)
 		let before = Hashtbl.create 0 in
 		com.module_lut#iter (fun path _ -> Hashtbl.replace before path ());
+		(* Stage-0 measurement: hxb full vs partial restores during the pre-phase (cumulative counters,
+		   so snapshot the delta) and the pre-phase wall time -- the number that decides Phase 2's worth. *)
+		let full0 = !(com.hxb_reader_stats.modules_fully_restored) in
+		let part0 = !(com.hxb_reader_stats.modules_partially_restored) in
+		let t0 = Extc.time () in
 		List.iter (fun mpath ->
 			(try ignore (tctx.Typecore.g.Typecore.do_load_module tctx mpath null_pos)
 			 with Error.Error _ | Error.Fatal_error _ -> ());
@@ -293,7 +298,13 @@ let retype_dirty_frontier com tctx =
 		   the pre-phase pulled in, not just the seeds. All of it is post-PFinal so inline cf_expr
 		   bodies are accurate. *)
 		ServerCache.record_prephase_closure com before;
-		if dbg then Printf.eprintf "[header-invalidation] frontier closure typed: %d modules\n%!" ServerCache.spare_stats.sp_retyped
+		if dbg then begin
+			let full = !(com.hxb_reader_stats.modules_fully_restored) - full0 in
+			let part = !(com.hxb_reader_stats.modules_partially_restored) - part0 in
+			(* [part] counts every restore; full restores are a subset, so partial-only = part - full. *)
+			Printf.eprintf "[header-invalidation] frontier closure typed: %d MCode modules | hxb restores: full=%d partial-only=%d | pre-phase wall=%.0fms\n%!"
+				ServerCache.spare_stats.sp_retyped full (part - full) ((Extc.time () -. t0) *. 1000.)
+		end
 
 (** Creates the typer context and types [classes] into it. *)
 let do_type com mctx actx display_file_dot_path =
