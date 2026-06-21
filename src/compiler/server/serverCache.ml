@@ -214,19 +214,17 @@ let dump_spare_stats com =
 let note_retyped_module com m =
 	if Define.defined com.defines Define.HxbHeaderInvalidation then begin
 		let sign = m.m_extra.m_sign in
-		let old_header =
-			match Hashtbl.find_opt header_baselines (sign,m.m_path) with
-			| Some oh -> oh
-			| None -> None
-		in
-		let new_header = ModuleHeader.module_header_of m in
-		m.m_extra.m_header <- Some new_header;
 		spare_stats.sp_retyped <- spare_stats.sp_retyped + 1;
-		match old_header with
-		| None ->
+		(* Only modules with a captured baseline (i.e. they were in the cache before this compile) can
+		   be diffed; for anything else we must not even force [module_header_of], which would evaluate
+		   lazies / mutate m_header on a module we have no business touching (e.g. one a macro just
+		   defined). No baseline => leave it alone, dependents stay conservative. *)
+		match Hashtbl.find_opt header_baselines (sign,m.m_path) with
+		| None | Some None ->
 			spare_stats.sp_baseline_none <- spare_stats.sp_baseline_none + 1
-			(* no baseline to diff against: dependents stay conservative *)
-		| Some old_header ->
+		| Some (Some old_header) ->
+			let new_header = ModuleHeader.module_header_of m in
+			m.m_extra.m_header <- Some new_header;
 			let changes = ModuleHeader.header_diff old_header new_header in
 			Hashtbl.replace header_deltas (sign,m.m_path) (changes,m);
 			Hashtbl.replace header_delta_paths m.m_path sign
@@ -274,6 +272,23 @@ let dependency_change_observable com m_extra sign mpath reason =
 			observable
 		end
 
+(* Record a fresh header for every module the pre-phase pulled into the typer context this round.
+   [before] is the set of module paths already in [module_lut] before the pre-phase ran (init-macro
+   modules, display modules, ...): those are NOT our doing and must be left untouched (forcing a
+   macro-defined module's header corrupts it). Everything that appeared SINCE is the dirty closure of
+   the frontier seeds -- seeds, their cyclic peers, and freshly loaded deps. note_retyped_module is a
+   no-op for any of them without a captured baseline, so reused-but-uncached deps are skipped too. *)
+let record_prephase_closure com before =
+	if Define.defined com.defines Define.HxbHeaderInvalidation then
+		com.module_lut#fold (fun path m () ->
+			(* MCode only: MFake / MMacro modules created during the pre-phase are macro-defined
+			   (Context.defineType/defineModule, macroContext.ml) and must not have their header
+			   forced/recorded -- that corrupts them. The runtime cyclic peers we want are MCode. *)
+			match m.m_extra.m_kind with
+			| MCode when not (Hashtbl.mem before path) -> note_retyped_module com m
+			| _ -> ()
+		) ()
+
 (* The dirty frontier: cached source modules whose own file changed (the roots of invalidation).
    Used by the phase-1 pre-phase to re-type these FIRST, so their fresh headers are available when
    [dependency_change_observable] decides whether their dependents can be spared. This is only a
@@ -302,18 +317,23 @@ let collect_dirty_frontier com =
 					&& (try file_time file <> m_extra.m_time with _ -> false)
 				in
 				if tainted || file_changed then begin
-					(* Snapshot the cached header now, while [m_extra] is still the previous compile's
-					   module; [do_load_module] will replace this entry with a fresh (m_header=None) one. *)
-					Hashtbl.replace header_baselines (m_extra.m_sign,m_path) m_extra.m_header;
 					spare_stats.sp_frontier <- spare_stats.sp_frontier + 1;
 					acc := m_path :: !acc
 				end
 			| MFake | MImport | MExtern ->
 				()
 		in
-		Hashtbl.iter (fun path m -> consider path m.m_extra) cc#get_modules;
+		(* Snapshot the cached header of EVERY module now, while [m_extra] is still the previous
+		   compile's object. The pre-phase re-types not just the frontier seeds but their whole dirty
+		   closure (e.g. cyclic peers that depend back on a seed), replacing those cache entries with
+		   fresh (m_header=None) ones; any of them that gets re-typed needs its old header to diff
+		   against. Cheap: just reads the already-resident m_header, forces nothing. *)
+		let snapshot m_path m_extra = Hashtbl.replace header_baselines (m_extra.m_sign,m_path) m_extra.m_header in
+		Hashtbl.iter (fun path m -> snapshot path m.m_extra; consider path m.m_extra) cc#get_modules;
 		Hashtbl.iter (fun path mc ->
-			if not (Hashtbl.mem cc#get_modules path) then consider path mc.HxbData.mc_extra
+			if not (Hashtbl.mem cc#get_modules path) then begin
+				snapshot path mc.HxbData.mc_extra; consider path mc.HxbData.mc_extra
+			end
 		) cc#get_hxb;
 		!acc
 	end

@@ -275,24 +275,25 @@ let retype_dirty_frontier com tctx =
 	| paths ->
 		if dbg then Printf.eprintf "[header-invalidation] frontier: %d modules [%s]\n%!"
 			(List.length paths) (String.concat ", " (List.map s_type_path paths));
-		let modules = List.filter_map (fun mpath ->
-			let r =
-				try Some (tctx.Typecore.g.Typecore.do_load_module tctx mpath null_pos)
-				with Error.Error _ | Error.Fatal_error _ -> None
-			in
-			Typecore.flush_pass tctx.g PBuildClass "header-prephase";
-			r
-		) paths in
+		(* Snapshot what's already in the context (init-macro / display modules) so we only record
+		   headers for what the pre-phase itself pulls in below. *)
+		let before = Hashtbl.create 0 in
+		com.module_lut#iter (fun path _ -> Hashtbl.replace before path ());
+		List.iter (fun mpath ->
+			(try ignore (tctx.Typecore.g.Typecore.do_load_module tctx mpath null_pos)
+			 with Error.Error _ | Error.Fatal_error _ -> ());
+			Typecore.flush_pass tctx.g PBuildClass "header-prephase"
+		) paths;
 		(try
 			Typecore.flush_pass tctx.g PFinal "header-prephase"
 		with Error.Error _ | Error.Fatal_error _ ->
 			());
-		(* Now that the frontier is fully typed, diff each fresh header against the cached one and
-		   record the result for the dependency check. *)
-		List.iter (fun m ->
-			ServerCache.note_retyped_module com m;
-			if dbg then Printf.eprintf "[header-invalidation] frontier typed: %s\n%!" (s_type_path m.m_path)
-		) modules
+		(* Re-typing the frontier drags in its whole dirty closure (cyclic peers etc.); the outer
+		   cascade reaches the seeds *through* those peers, so record a fresh header for every module
+		   the pre-phase pulled in, not just the seeds. All of it is post-PFinal so inline cf_expr
+		   bodies are accurate. *)
+		ServerCache.record_prephase_closure com before;
+		if dbg then Printf.eprintf "[header-invalidation] frontier closure typed: %d modules\n%!" ServerCache.spare_stats.sp_retyped
 
 (** Creates the typer context and types [classes] into it. *)
 let do_type com mctx actx display_file_dot_path =
