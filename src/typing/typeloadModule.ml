@@ -760,7 +760,13 @@ class hxb_reader_api_typeload
 				false
 
 	method make_lazy_type t f =
-		TLazy (make_lazy g t f "typeload-api")
+		(* Phase 2 probe (increment 1): mirror the server-api gate on the --hxb-lib path so the
+		   output-producing roundtrip exercises header-without-impl too. Under -D hxb.lazy-force
+		   the reference is left lazy until followed instead of force-evaluated at PForce. *)
+		if Define.defined com.defines Define.HxbLazyForce then
+			TLazy (make_unforced_lazy t f "typeload-api")
+		else
+			TLazy (make_lazy g t f "typeload-api")
 end
 
 let rec load_hxb_module com g path p =

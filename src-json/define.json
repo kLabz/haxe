@@ -88,6 +88,12 @@
 		"doc": "Use structured module headers (phase 1) to spare dependents whose used signatures are unchanged."
 	},
 	{
+		"name": "HxbLazyForce",
+		"define": "hxb.lazy-force",
+		"signatureNeutral": true,
+		"doc": "Phase 2 probe: do not force every server-api lazy type at PForce; leave references lazy until followed."
+	},
+	{
 		"name": "DisableParallelism",
 		"define": "disable-parallelism",
 		"signatureNeutral": true,

@@ -20,6 +20,7 @@ class Main {
 			var defaultArgs = [];
 			#if disable_hxb_cache defaultArgs = defaultArgs.concat(["-D", "disable-hxb-cache"]); #end
 			#if header_invalidation defaultArgs = defaultArgs.concat(["-D", "hxb.header-invalidation"]); #end
+			#if lazy_force defaultArgs = defaultArgs.concat(["-D", "hxb.lazy-force"]); #end
 			#if optimistic_display_requests defaultArgs = defaultArgs.concat(["-D", "optimistic-display-requests"]); #end
 			if (defaultArgs.length > 0) server.setDefaultRequestArguments(defaultArgs);
 

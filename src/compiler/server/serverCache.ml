@@ -613,7 +613,12 @@ class hxb_reader_api_server
 
 	method make_lazy_type t f =
 		let r = make_unforced_lazy t f "server-api" in
-		delay PForce (fun () -> ignore(lazy_type r));
+		(* Phase 2 probe (increment 1): normally every server-api lazy is force-evaluated at
+		   PForce ("PForce forces everything"). Under -D hxb.lazy-force we skip that, leaving the
+		   reference lazy until something actually follows it — exercising the header-without-impl
+		   path and surfacing any call site that matches a type without following TLazy. *)
+		if not (Define.defined com.defines Define.HxbLazyForce) then
+			delay PForce (fun () -> ignore(lazy_type r));
 		TLazy r
 end
 
