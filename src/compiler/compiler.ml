@@ -312,6 +312,11 @@ let do_type com mctx actx display_file_dot_path =
 	let macros = match mctx with None -> None | Some mctx -> mctx.g.macros in
 	Setup.init_native_libs com actx.native_libs;
 	let tctx = Setup.create_typer_context com macros in
+	(* Re-type the dirty frontier and snapshot fresh headers BEFORE anything walks the module graph
+	   (display-file load below, check_display_file, main typing). Those walks make the cache-reuse
+	   decision via ServerCache.dependency_change_observable, which needs the header deltas already
+	   populated; running this later left every lookup hitting an empty table. *)
+	retype_dirty_frontier com tctx;
 	let display_file_dot_path = DisplayProcessing.maybe_load_display_file_before_typing tctx display_file_dot_path in
 	(* Make sure display module is being typed *)
 	Option.may (fun cpath -> actx.classes <- cpath :: actx.classes) display_file_dot_path;
@@ -322,7 +327,6 @@ let do_type com mctx actx display_file_dot_path =
 		com.callbacks#run com.error_ext com.callbacks#get_after_init_macros;
 		run_or_diagnose com (fun () ->
 			if com.display.dms_kind <> DMNone then DisplayTexpr.check_display_file tctx cs;
-			retype_dirty_frontier com tctx;
 			List.iter (fun cpath ->
 				ignore(tctx.Typecore.g.Typecore.do_load_module tctx cpath null_pos);
 				Typecore.flush_pass tctx.g PBuildClass "actx.classes"
