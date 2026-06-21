@@ -284,6 +284,15 @@ let retype_dirty_frontier com tctx =
 		let full0 = !(com.hxb_reader_stats.modules_fully_restored) in
 		let part0 = !(com.hxb_reader_stats.modules_partially_restored) in
 		let t0 = Extc.time () in
+		(* Phase 2 increment 2 (WIP, gated): restore the pre-phase's CLEAN dependency peers signature-
+		   only so re-typing an edited seed does not type the whole SCC's bodies. Invalidation is sound
+		   under this (HeaderInvalidation passes); the remaining flag-on failures are partial restore not
+		   yet being structurally complete enough for a re-typed seed's peer references (increment 3). *)
+		let partial = Define.defined com.defines Define.HxbPrephasePartial in
+		if partial then begin
+			ServerCache.prephase_partial_mode := true;
+			Hashtbl.clear ServerCache.prephase_partial_paths
+		end;
 		List.iter (fun mpath ->
 			(try ignore (tctx.Typecore.g.Typecore.do_load_module tctx mpath null_pos)
 			 with Error.Error _ | Error.Fatal_error _ -> ());
@@ -298,6 +307,8 @@ let retype_dirty_frontier com tctx =
 		   the pre-phase pulled in, not just the seeds. All of it is post-PFinal so inline cf_expr
 		   bodies are accurate. *)
 		ServerCache.record_prephase_closure com before;
+		if partial then
+			ServerCache.prephase_partial_mode := false;
 		if dbg then begin
 			let full = !(com.hxb_reader_stats.modules_fully_restored) - full0 in
 			let part = !(com.hxb_reader_stats.modules_partially_restored) - part0 in

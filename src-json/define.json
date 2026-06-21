@@ -94,6 +94,12 @@
 		"doc": "Phase 2 probe: do not force every server-api lazy type at PForce; leave references lazy until followed."
 	},
 	{
+		"name": "HxbPrephasePartial",
+		"define": "hxb.prephase-partial",
+		"signatureNeutral": true,
+		"doc": "Phase 2: restore the header pre-phase's dependency peers signature-only (partial) and discard the throwaway closure afterwards, so computing an edited seed's header does not type the whole SCC's bodies."
+	},
+	{
 		"name": "DisableParallelism",
 		"define": "disable-parallelism",
 		"signatureNeutral": true,

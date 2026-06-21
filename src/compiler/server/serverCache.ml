@@ -124,7 +124,20 @@ let get_changed_directories sctx com =
 let get_changed_directories sctx com =
 	Timer.time com.Common.timer_ctx ["server";"module cache";"changed dirs"] (get_changed_directories sctx) com
 
+let prephase_partial_mode = ref false
+let prephase_partial_paths : (path, unit) Hashtbl.t = Hashtbl.create 0
+
 let get_typing_mode com m_extra =
+	(* Phase 2 pre-phase: restore CLEAN cached peers signature-only. A dirty/tainted module (MSBad)
+	   must NOT go partial -- it is a frontier seed that has to be re-typed in full from its new source;
+	   restoring it signature-only from the previous compile's hxb yields a STALE header, which silently
+	   spares dependents of a module whose signature actually changed. *)
+	if !prephase_partial_mode
+		&& (match m_extra.m_cache_state with MSGood -> true | _ -> false)
+		&& not (DisplayPosition.display_position#is_in_file (Path.UniqueKey.lazy_key m_extra.m_file))
+	then
+		AllowPartialTyping
+	else
 	let full_typing = com.is_macro_context
 		|| com.display.dms_full_typing
 		|| Define.defined com.defines Define.DisableHxbCache
@@ -285,7 +298,7 @@ let record_prephase_closure com before =
 			   (Context.defineType/defineModule, macroContext.ml) and must not have their header
 			   forced/recorded -- that corrupts them. The runtime cyclic peers we want are MCode. *)
 			match m.m_extra.m_kind with
-			| MCode when not (Hashtbl.mem before path) -> note_retyped_module com m
+			| MCode when not (Hashtbl.mem before path) && not (Hashtbl.mem prephase_partial_paths path) -> note_retyped_module com m
 			| _ -> ()
 		) ()
 
@@ -558,6 +571,7 @@ class hxb_reader_api_server
 		| BinaryModule mc ->
 			let reader = new HxbReader.hxb_reader path com.hxb_reader_stats (if Common.defined com Define.HxbTimes then Some com.timer_ctx else None) in
 			let typing_mode = get_typing_mode com mc.mc_extra in
+			if !prephase_partial_mode && typing_mode = AllowPartialTyping then Hashtbl.replace prephase_partial_paths path ();
 			let f_next chunks until =
 				let macro = if com.is_macro_context then " (macro)" else "" in
 				let f  = reader#read_chunks_until (self :> HxbReaderApi.hxb_reader_api) chunks until in
@@ -617,7 +631,7 @@ class hxb_reader_api_server
 		   PForce ("PForce forces everything"). Under -D hxb.lazy-force we skip that, leaving the
 		   reference lazy until something actually follows it — exercising the header-without-impl
 		   path and surfacing any call site that matches a type without following TLazy. *)
-		if not (Define.defined com.defines Define.HxbLazyForce) then
+		if not (Define.defined com.defines Define.HxbLazyForce || !prephase_partial_mode) then
 			delay PForce (fun () -> ignore(lazy_type r));
 		TLazy r
 end
