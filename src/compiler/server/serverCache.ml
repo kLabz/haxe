@@ -165,13 +165,18 @@ type spare_stats = {
 	mutable sp_no_delta : int;      (* conservative: dependency not re-typed this round (no diff) *)
 	mutable sp_no_edges : int;      (* conservative: no field-dep edges to the dependency *)
 	mutable sp_sign_mismatch : int; (* no-delta where the path IS a frontier module but the sign differs *)
+	mutable sp_frontier : int;      (* modules collected into the dirty frontier (to be re-typed) *)
+	mutable sp_retyped : int;       (* frontier modules note_retyped_module actually processed *)
+	mutable sp_baseline_none : int; (* frontier modules with no cached old header (=> no diff stored) *)
 }
 
-let spare_stats = { sp_spared = 0; sp_observed = 0; sp_no_delta = 0; sp_no_edges = 0; sp_sign_mismatch = 0 }
+let spare_stats = { sp_spared = 0; sp_observed = 0; sp_no_delta = 0; sp_no_edges = 0; sp_sign_mismatch = 0;
+	sp_frontier = 0; sp_retyped = 0; sp_baseline_none = 0 }
 
 let reset_spare_stats () =
 	spare_stats.sp_spared <- 0; spare_stats.sp_observed <- 0;
-	spare_stats.sp_no_delta <- 0; spare_stats.sp_no_edges <- 0; spare_stats.sp_sign_mismatch <- 0
+	spare_stats.sp_no_delta <- 0; spare_stats.sp_no_edges <- 0; spare_stats.sp_sign_mismatch <- 0;
+	spare_stats.sp_frontier <- 0; spare_stats.sp_retyped <- 0; spare_stats.sp_baseline_none <- 0
 
 (* Per-compile record, keyed by (signature, module path), of the header [changes] for each module
    the frontier pre-phase re-typed, together with that re-typed [module_def] (used to tell whether a
@@ -183,9 +188,14 @@ let header_deltas : (Digest.t * path, ModuleHeader.header_change list * module_d
 let header_delta_paths : (path, Digest.t) Hashtbl.t = Hashtbl.create 0
 (* Diagnostic: distinct paths that hit the no-delta (conservative) branch -> why they were dirty. *)
 let header_no_delta_sample : (path, string) Hashtbl.t = Hashtbl.create 0
+(* Old (pre-retype) headers of the frontier modules, captured BEFORE [do_load_module] re-types them
+   and overwrites their cache entry. [note_retyped_module] diffs against this snapshot, not the live
+   cache (which by then holds the freshly-typed module whose [m_header] is still None). *)
+let header_baselines : (Digest.t * path, module_header option) Hashtbl.t = Hashtbl.create 0
 
 let reset_header_deltas () =
-	Hashtbl.clear header_deltas; Hashtbl.clear header_delta_paths; Hashtbl.clear header_no_delta_sample
+	Hashtbl.clear header_deltas; Hashtbl.clear header_delta_paths; Hashtbl.clear header_no_delta_sample;
+	Hashtbl.clear header_baselines
 
 (* Opt-in diagnostic (-D hxb.header_stats); kept off the normal stderr so it can't trip
    assertSilence in the test suite. *)
@@ -193,6 +203,8 @@ let dump_spare_stats com =
 	if Define.raw_defined com.defines "hxb.header_stats" then
 		Printf.eprintf "[header-invalidation] spared=%d observed=%d | conservative: no-delta=%d (sign-mismatch=%d) no-edges=%d | frontier diffed=%d | distinct no-delta deps=%d\n%!"
 			spare_stats.sp_spared spare_stats.sp_observed spare_stats.sp_no_delta spare_stats.sp_sign_mismatch spare_stats.sp_no_edges (Hashtbl.length header_deltas) (Hashtbl.length header_no_delta_sample);
+		Printf.eprintf "[header-invalidation] frontier=%d retyped=%d baseline-none=%d\n%!"
+			spare_stats.sp_frontier spare_stats.sp_retyped spare_stats.sp_baseline_none;
 		let sample = Hashtbl.fold (fun p reason acc -> if List.length acc < 25 then (Printf.sprintf "%s<%s>" (s_type_path p) reason) :: acc else acc) header_no_delta_sample [] in
 		Printf.eprintf "[header-invalidation] no-delta sample: %s\n%!" (String.concat ", " sample)
 
@@ -203,14 +215,17 @@ let note_retyped_module com m =
 	if Define.defined com.defines Define.HxbHeaderInvalidation then begin
 		let sign = m.m_extra.m_sign in
 		let old_header =
-			try ((com.cs#get_context sign)#find_module_extra m.m_path).m_header
-			with Not_found -> None
+			match Hashtbl.find_opt header_baselines (sign,m.m_path) with
+			| Some oh -> oh
+			| None -> None
 		in
 		let new_header = ModuleHeader.module_header_of m in
 		m.m_extra.m_header <- Some new_header;
+		spare_stats.sp_retyped <- spare_stats.sp_retyped + 1;
 		match old_header with
 		| None ->
-			() (* no baseline to diff against: dependents stay conservative *)
+			spare_stats.sp_baseline_none <- spare_stats.sp_baseline_none + 1
+			(* no baseline to diff against: dependents stay conservative *)
 		| Some old_header ->
 			let changes = ModuleHeader.header_diff old_header new_header in
 			Hashtbl.replace header_deltas (sign,m.m_path) (changes,m);
@@ -229,6 +244,12 @@ let dependency_change_observable com m_extra sign mpath reason =
 	else match Hashtbl.find_opt header_deltas (sign,mpath) with
 	| None ->
 		spare_stats.sp_no_delta <- spare_stats.sp_no_delta + 1;
+		if Define.raw_defined com.defines "hxb.header_stats" && spare_stats.sp_no_delta <= 5 then begin
+			let same_path = Hashtbl.fold (fun (s,p) _ acc -> if p = mpath then s :: acc else acc) header_deltas [] in
+			Printf.eprintf "[header-invalidation] MISS dep=%s lookup-sign=%s | table-size=%d same-path-entries=[%s]\n%!"
+				(s_type_path mpath) (Digest.to_hex sign) (Hashtbl.length header_deltas)
+				(String.concat ";" (List.map Digest.to_hex same_path))
+		end;
 		if not (Hashtbl.mem header_no_delta_sample mpath) then
 			Hashtbl.replace header_no_delta_sample mpath (Printer.s_module_skip_reason reason);
 		(match Hashtbl.find_opt header_delta_paths mpath with
@@ -280,7 +301,13 @@ let collect_dirty_frontier com =
 					Path.file_extension file = "hx"
 					&& (try file_time file <> m_extra.m_time with _ -> false)
 				in
-				if tainted || file_changed then acc := m_path :: !acc
+				if tainted || file_changed then begin
+					(* Snapshot the cached header now, while [m_extra] is still the previous compile's
+					   module; [do_load_module] will replace this entry with a fresh (m_header=None) one. *)
+					Hashtbl.replace header_baselines (m_extra.m_sign,m_path) m_extra.m_header;
+					spare_stats.sp_frontier <- spare_stats.sp_frontier + 1;
+					acc := m_path :: !acc
+				end
 			| MFake | MImport | MExtern ->
 				()
 		in
