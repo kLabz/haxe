@@ -334,13 +334,20 @@ let retype_dirty_frontier com tctx =
 		   which dies with BadModule unless the seed is present in the SHARED lut. So re-type the dirty
 		   SEEDS only (not their whole closure) from source into the now-restored shared lut, with FULL
 		   peer restores. Cheap relative to the isolated phase: only the genuinely-edited seeds are
-		   re-typed; their dependencies are restored from the cache, not re-typed. *)
+		   re-typed; their dependencies are restored from the cache, not re-typed. The PFinal flush is
+		   load-bearing: inline / @:generic cf_expr bodies are not forced until PFinal, so without it a
+		   spared dependent that inlines a seed's field finds cf_expr = None (recursive array get / no
+		   inline). The committed non-isolated pre-phase relies on the same flush. *)
 		if isolate then begin
 			List.iter (fun mpath ->
 				(try ignore (tctx.Typecore.g.Typecore.do_load_module tctx mpath null_pos)
 				 with Error.Error _ | Error.Fatal_error _ -> ());
 				Typecore.flush_pass tctx.g PBuildClass "header-prephase-seed"
-			) paths
+			) paths;
+			(try
+				Typecore.flush_pass tctx.g PFinal "header-prephase-seed"
+			with Error.Error _ | Error.Fatal_error _ ->
+				())
 		end;
 		if dbg then begin
 			let full = !(com.hxb_reader_stats.modules_fully_restored) - full0 in
