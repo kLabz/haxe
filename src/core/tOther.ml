@@ -275,6 +275,7 @@ let mk_enum m path pos name_pos =
 		e_constrs = PMap.empty;
 		e_names = [];
 		e_type = mk_mono();
+		e_forward = None;
 	}
 
 let mk_abstract m path pos name_pos =
@@ -304,6 +305,7 @@ let mk_abstract m path pos name_pos =
 		a_extern = false;
 		a_enum = false;
 		a_call = None;
+		a_forward = None;
 	}
 
 module TClass = struct

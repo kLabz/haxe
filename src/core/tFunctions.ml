@@ -130,6 +130,7 @@ let mk_typedef m path pos name_pos t =
 		t_using = [];
 		t_type = t;
 		t_restore = (fun () -> ());
+		t_forward = None;
 	}
 
 let class_module_type c =
@@ -164,9 +165,45 @@ let mk_class m path pos name_pos =
 		cl_build = (fun() -> Built);
 		cl_restore = (fun() -> ());
 		cl_descendants = [];
+		cl_forward = None;
 	} in
 	c.cl_type <- TType(class_module_type c,[]);
 	c
+
+(* Header pre-phase "hot-swap": follow a class/enum/abstract's forward chain to its canonical object.
+   A stale duplicate produced by the throwaway re-type carries a forward to the canonical version; with
+   no forward set (the normal case) these are the identity function. Identity comparisons in unification
+   (and any other identity-sensitive site) must compare the followed objects so a leaked duplicate
+   unifies with its canonical counterpart instead of failing as "X should be X". *)
+(* Resolver set by the compiler (with module_lut access): given a stale pre-phase duplicate class/enum/
+   abstract, return the live canonical object for its path (or the argument unchanged if none). Default
+   is the identity, so behavior is unchanged outside the pre-phase. *)
+let class_resolver : (tclass -> tclass) ref = ref (fun c -> c)
+let enum_resolver : (tenum -> tenum) ref = ref (fun e -> e)
+let abstract_resolver : (tabstract -> tabstract) ref = ref (fun a -> a)
+let typedef_resolver : (tdef -> tdef) ref = ref (fun t -> t)
+
+(* follow_* chases the forward chain to the canonical object. A stale duplicate is tagged with a
+   self-forward sentinel (cl_forward = Some self): the first follow resolves it through the resolver and
+   memoizes the result, so subsequent follows are a plain chain walk. Everything reachable through the
+   type graph during unification (the compared pair, super/implements links, type-parameter constraints)
+   is canonicalized this way, since those traversals already go through follow_*. None = not stale. *)
+let rec follow_class c = match c.cl_forward with
+	| None -> c
+	| Some c2 when c2 != c -> follow_class c2
+	| Some _ -> let k = !class_resolver c in if k != c then (c.cl_forward <- Some k; follow_class k) else c
+let rec follow_enum e = match e.e_forward with
+	| None -> e
+	| Some e2 when e2 != e -> follow_enum e2
+	| Some _ -> let k = !enum_resolver e in if k != e then (e.e_forward <- Some k; follow_enum k) else e
+let rec follow_abstract a = match a.a_forward with
+	| None -> a
+	| Some a2 when a2 != a -> follow_abstract a2
+	| Some _ -> let k = !abstract_resolver a in if k != a then (a.a_forward <- Some k; follow_abstract k) else a
+let rec follow_typedef t = match t.t_forward with
+	| None -> t
+	| Some t2 when t2 != t -> follow_typedef t2
+	| Some _ -> let k = !typedef_resolver t in if k != t then (t.t_forward <- Some k; follow_typedef k) else t
 
 let module_extra file sign time kind added policy =
 	{
@@ -264,6 +301,7 @@ let null_enum = {
 	e_flags = 0;
 	e_constrs = PMap.empty;
 	e_names = [];
+	e_forward = None;
 }
 
 let null_field = mk_field "" t_dynamic null_pos null_pos
@@ -304,6 +342,7 @@ let null_abstract = {
 	a_constructor = None;
 	a_extern = false;
 	a_enum = false;
+	a_forward = None;
 }
 
 let create_dependency ?(fields=MDFull) mdep origin =

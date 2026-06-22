@@ -296,11 +296,12 @@ let retype_dirty_frontier com tctx =
 		   only header_deltas (recorded below, before the restore) are handed back. *)
 		let isolate = Define.defined com.defines Define.HxbPrephaseIsolate in
 		let saved_lut = com.module_lut in
-		if isolate then begin
+		let fresh_lut = if isolate then begin
 			let fresh = new module_lut in
 			saved_lut#iter (fun path m -> fresh#add path m);
-			com.module_lut <- fresh
-		end;
+			com.module_lut <- fresh;
+			Some fresh
+		end else None in
 		let restore_lut () = if isolate then com.module_lut <- saved_lut in
 		(* The isolated pre-phase is a throwaway computation: it re-types seeds and (under partial mode)
 		   signature-only restores their clean peers into a throwaway lut, solely to record header deltas.
@@ -334,22 +335,39 @@ let retype_dirty_frontier com tctx =
 			ServerCache.prephase_partial_mode := true;
 			Hashtbl.clear ServerCache.prephase_partial_paths
 		end;
+		(* The isolated pre-phase is a throwaway: its only sound output is the header deltas recorded as it
+		   goes; the re-typed modules are dropped. Re-typing seeds/peers from a partially-restored closure
+		   exercises inline / default-arg / unification paths that can fail in MANY ways (Error.Error,
+		   Unify_error, ...), and several of those paths have no in-typer recovery, so the exception
+		   propagates. Rather than chase each raise site, contain ALL of them at the pre-phase boundary:
+		   any failure just means fewer deltas recorded -> more conservative (sound) invalidation, and the
+		   real compile re-types/restores everything and surfaces every genuine error properly. Only
+		   Stack_overflow / Out_of_memory propagate (genuine resource exhaustion, unsafe to swallow). This
+		   is sound precisely because the work is discarded; it is NOT a blanket excuse elsewhere. *)
+		let protect f =
+			try f ()
+			with
+			| Stack_overflow | Out_of_memory as e -> raise e
+			| Error.Error _ | Error.Fatal_error _ -> ()
+			(* The broad catch is sound ONLY for the isolated pre-phase, whose modules are dropped. The
+			   non-isolated pre-phase types into the shared lut the main compile reuses, so there any other
+			   exception must propagate (to the outer handler) rather than be silently contained. *)
+			| _ when isolate -> ()
+		in
 		(try
 			List.iter (fun mpath ->
-				(try ignore (tctx.Typecore.g.Typecore.do_load_module tctx mpath null_pos)
-				 with Error.Error _ | Error.Fatal_error _ -> ());
-				Typecore.flush_pass tctx.g PBuildClass "header-prephase"
+				protect (fun () ->
+					ignore (tctx.Typecore.g.Typecore.do_load_module tctx mpath null_pos);
+					Typecore.flush_pass tctx.g PBuildClass "header-prephase")
 			) paths;
-			(try
-				Typecore.flush_pass tctx.g PFinal "header-prephase"
-			with Error.Error _ | Error.Fatal_error _ ->
-				());
+			protect (fun () -> Typecore.flush_pass tctx.g PFinal "header-prephase");
 			(* Re-typing the frontier drags in its whole dirty closure (cyclic peers etc.); the outer
 			   cascade reaches the seeds *through* those peers, so record a fresh header for every module
 			   the pre-phase pulled in, not just the seeds. All of it is post-PFinal so inline cf_expr
 			   bodies are accurate. *)
-			ServerCache.record_prephase_closure com before
+			protect (fun () -> ServerCache.record_prephase_closure com before)
 		with e ->
+			(* Only Stack_overflow / Out_of_memory reach here; restore state before propagating. *)
 			restore_lut ();
 			restore_messages ();
 			if partial then ServerCache.prephase_partial_mode := false;
@@ -358,6 +376,36 @@ let retype_dirty_frontier com tctx =
 		restore_messages ();
 		if partial then
 			ServerCache.prephase_partial_mode := false;
+		(* Hot-swap: a pre-phase leak produces distinct (stale) type objects for paths the throwaway loop
+		   pulled in; those leak into the main compile and clash with the canonical objects as duplicate
+		   identity, and -- worse -- sit inside canonical classes' super/implements chains. Tag every stale
+		   object (in [fresh], not pre-existing in [before], same signature as this compile) with a
+		   self-forward sentinel, and point the resolvers at the live com.module_lut. follow_* then resolves
+		   any stale object to its canonical wherever the type graph is traversed during unification
+		   (compared pair, super/implements walk, type-parameter constraints), so duplicates coincide. *)
+		(match fresh_lut with
+		| Some fresh ->
+			let open Type in
+			let main_sign = Define.get_signature com.defines in
+			let canon_type path = (com.module_lut#find_by_type path).m_types in
+			TFunctions.class_resolver := (fun c ->
+				try (match List.find (fun mt -> t_path mt = c.cl_path) (canon_type c.cl_path) with TClassDecl k -> k | _ -> c) with Not_found -> c);
+			TFunctions.enum_resolver := (fun e ->
+				try (match List.find (fun mt -> t_path mt = e.e_path) (canon_type e.e_path) with TEnumDecl k -> k | _ -> e) with Not_found -> e);
+			TFunctions.abstract_resolver := (fun a ->
+				try (match List.find (fun mt -> t_path mt = a.a_path) (canon_type a.a_path) with TAbstractDecl k -> k | _ -> a) with Not_found -> a);
+			TFunctions.typedef_resolver := (fun t ->
+				try (match List.find (fun mt -> t_path mt = t.t_path) (canon_type t.t_path) with TTypeDecl k -> k | _ -> t) with Not_found -> t);
+			fresh#iter (fun path m ->
+				if not (Hashtbl.mem before path) && m.m_extra.m_sign = main_sign then
+					List.iter (function
+						| TClassDecl c -> c.cl_forward <- Some c
+						| TEnumDecl e -> e.e_forward <- Some e
+						| TAbstractDecl a -> a.a_forward <- Some a
+						| TTypeDecl t -> t.t_forward <- Some t
+					) m.m_types
+			)
+		| None -> ());
 		(* Step 2 (shared seed materialization): the isolated computation above produced only header
 		   deltas; its re-typed seeds live in the throwaway lut. A spared dependent in the main pass
 		   resolves its reference to a dirty seed eagerly (the seed is still MSBad/tainted in the cache),
@@ -370,9 +418,12 @@ let retype_dirty_frontier com tctx =
 		   inline). The committed non-isolated pre-phase relies on the same flush. *)
 		if isolate then begin
 			List.iter (fun mpath ->
-				(try ignore (tctx.Typecore.g.Typecore.do_load_module tctx mpath null_pos)
-				 with Error.Error _ | Error.Fatal_error _ -> ());
-				Typecore.flush_pass tctx.g PBuildClass "header-prephase-seed"
+				(* Same guard shape as the loop above: keep the PBuildClass flush inside the try so a
+				   delayed default-arg typing error cannot escape (mirrors do_load_module's handling). *)
+				(try
+					ignore (tctx.Typecore.g.Typecore.do_load_module tctx mpath null_pos);
+					Typecore.flush_pass tctx.g PBuildClass "header-prephase-seed"
+				 with Error.Error _ | Error.Fatal_error _ -> ())
 			) paths;
 			(try
 				Typecore.flush_pass tctx.g PFinal "header-prephase-seed"
@@ -405,6 +456,27 @@ let do_type com mctx actx display_file_dot_path =
 	let macros = match mctx with None -> None | Some mctx -> mctx.g.macros in
 	Setup.init_native_libs com actx.native_libs;
 	let tctx = Setup.create_typer_context com macros in
+	(* Reset the hot-swap resolvers from any prior compile (they persist via global refs and are re-armed
+	   by retype_dirty_frontier only when the isolated pre-phase runs). *)
+	TFunctions.class_resolver := (fun c -> c);
+	TFunctions.enum_resolver := (fun e -> e);
+	TFunctions.abstract_resolver := (fun a -> a);
+	TFunctions.typedef_resolver := (fun t -> t);
+	(* Duplicate-identity unify counter (gated by -D hxb.header_stats): measures how many "X should be
+	   X" failures the hot-swap eliminates (0 on a correct build). *)
+	if Define.raw_defined com.defines "hxb.header_stats" then begin
+		TUnification.dup_identity_trace := true;
+		TUnification.dup_identity_count := 0;
+		Hashtbl.clear TUnification.dup_identity_paths
+	end;
+	(* Print the duplicate-identity tally even if typing aborts (a raw Unify_error from a leaked
+	   duplicate can escape do_type before CTypingDone, which is exactly the case we want to measure). *)
+	let print_dup_tally where =
+		if Define.raw_defined com.defines "hxb.header_stats" then
+			Printf.eprintf "[dup-identity v=mark1 %s] total=%d distinct-modules=%d [%s]\n%!"
+				where !TUnification.dup_identity_count (Hashtbl.length TUnification.dup_identity_paths)
+				(String.concat ", " (Hashtbl.fold (fun p () acc -> s_type_path p :: acc) TUnification.dup_identity_paths []))
+	in
 	(* Re-type the dirty frontier and snapshot fresh headers BEFORE anything walks the module graph
 	   (display-file load below, check_display_file, main typing). Those walks make the cache-reuse
 	   decision via ServerCache.dependency_change_observable, which needs the header deltas already
@@ -416,20 +488,25 @@ let do_type com mctx actx display_file_dot_path =
 	DumpConfig.update_from_defines com.part_scope.dump_config com.defines;
 	CommonCache.lock_signature com "after_init_macros";
 	Option.may (fun mctx -> MacroContext.finalize_macro_api tctx mctx) mctx;
-	(try begin
-		com.callbacks#run com.error_ext com.callbacks#get_after_init_macros;
-		run_or_diagnose com (fun () ->
-			if com.display.dms_kind <> DMNone then DisplayTexpr.check_display_file tctx cs;
-			List.iter (fun cpath ->
-				ignore(tctx.Typecore.g.Typecore.do_load_module tctx cpath null_pos);
-				Typecore.flush_pass tctx.g PBuildClass "actx.classes"
-			) (List.rev actx.classes);
-			Finalization.finalize tctx;
-		);
-	end with TypeloadParse.DisplayInMacroBlock ->
-		ignore(DisplayProcessing.load_display_module_in_macro tctx display_file_dot_path true)
-	);
+	(try
+		(try begin
+			com.callbacks#run com.error_ext com.callbacks#get_after_init_macros;
+			run_or_diagnose com (fun () ->
+				if com.display.dms_kind <> DMNone then DisplayTexpr.check_display_file tctx cs;
+				List.iter (fun cpath ->
+					ignore(tctx.Typecore.g.Typecore.do_load_module tctx cpath null_pos);
+					Typecore.flush_pass tctx.g PBuildClass "actx.classes"
+				) (List.rev actx.classes);
+				Finalization.finalize tctx;
+			);
+		end with TypeloadParse.DisplayInMacroBlock ->
+			ignore(DisplayProcessing.load_display_module_in_macro tctx display_file_dot_path true)
+		)
+	with e ->
+		print_dup_tally "aborted";
+		raise e);
 	enter_stage com CTypingDone;
+	print_dup_tally "typing-done";
 	ServerMessage.compiler_stage com;
 	(* If we are trying to find references, let's syntax-explore everything we know to check for the
 		identifier we are interested in. We then type only those modules that contain the identifier. *)

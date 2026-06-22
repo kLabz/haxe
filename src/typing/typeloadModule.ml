@@ -198,6 +198,7 @@ module ModuleLevel = struct
 						a_constructor = None;
 						a_extern = List.mem AbExtern d.d_flags;
 						a_enum = List.mem AbEnum d.d_flags || p_enum_meta <> None;
+						a_forward = None;
 					} in
 					begin match p_enum_meta with
 						| None when a.a_enum -> a.a_meta <- (Meta.Enum,[],null_pos) :: a.a_meta; (* HAXE5: remove *)

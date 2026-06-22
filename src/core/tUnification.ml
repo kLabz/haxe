@@ -24,6 +24,19 @@ type unify_error =
 
 exception Unify_error of unify_error list
 
+(* Diagnostic (header pre-phase experiment): call at a unify/type_eq FAILURE where the two classes
+   share a path but are distinct objects -- exactly the "X should be X" duplicate-identity error we are
+   measuring. Firing only on failure (not every attempt) avoids type-parameter / cross-context noise.
+   Gated by [dup_identity_trace] (set from -D hxb.header_stats) so normal builds pay nothing. *)
+let dup_identity_trace = ref false
+let dup_identity_count = ref 0
+let dup_identity_paths : (path, unit) Hashtbl.t = Hashtbl.create 0
+let note_dup_identity_failure c1 c2 =
+	if !dup_identity_trace && c1.cl_path = c2.cl_path then begin
+		incr dup_identity_count;
+		Hashtbl.replace dup_identity_paths c1.cl_path ()
+	end
+
 type eq_kind =
 	| EqStrict
 	| EqCoreType
@@ -441,18 +454,18 @@ let fast_eq_check type_param_check a b =
 	| TFun (l1,r1) , TFun (l2,r2) when List.length l1 = List.length l2 ->
 		List.for_all2 (fun (_,_,t1) (_,_,t2) -> type_param_check t1 t2) l1 l2 && type_param_check r1 r2
 	| TType (t1,l1), TType (t2,l2) ->
-		t1 == t2 && List.for_all2 type_param_check l1 l2
+		follow_typedef t1 == follow_typedef t2 && List.for_all2 type_param_check l1 l2
 	| TEnum (e1,l1), TEnum (e2,l2) ->
-		e1 == e2 && List.for_all2 type_param_check l1 l2
+		follow_enum e1 == follow_enum e2 && List.for_all2 type_param_check l1 l2
 	| TInst (c1,l1), TInst (c2,l2) ->
-		c1 == c2 && List.for_all2 type_param_check l1 l2
+		follow_class c1 == follow_class c2 && List.for_all2 type_param_check l1 l2
 	| TAbstract (a1,l1), TAbstract (a2,l2) ->
-		a1 == a2 && List.for_all2 type_param_check l1 l2
+		follow_abstract a1 == follow_abstract a2 && List.for_all2 type_param_check l1 l2
 	| TAnon an1,TAnon an2 ->
 		begin match !(an1.a_status),!(an2.a_status) with
-			| ClassStatics c, ClassStatics c2 -> c == c2
-			| EnumStatics e, EnumStatics e2 -> e == e2
-			| AbstractStatics a, AbstractStatics a2 -> a == a2
+			| ClassStatics c, ClassStatics c2 -> follow_class c == follow_class c2
+			| EnumStatics e, EnumStatics e2 -> follow_enum e == follow_enum e2
+			| AbstractStatics a, AbstractStatics a2 -> follow_abstract a == follow_abstract a2
 			| _ -> false
 		end
 	| _ , _ ->
@@ -649,13 +662,16 @@ let rec type_eq uctx a b =
 			(fun() -> try_apply_params_rec uctx.apply_params_stack t.t_params tl t.t_type (type_eq uctx a))
 			(fun l -> error (cannot_unify a b :: l))
 	| TEnum (e1,tl1) , TEnum (e2,tl2) ->
-		if e1 != e2 && not (param = EqCoreType && e1.e_path = e2.e_path) then error [cannot_unify a b];
+		if follow_enum e1 != follow_enum e2 && not (param = EqCoreType && e1.e_path = e2.e_path) then error [cannot_unify a b];
 		type_eq_params uctx a b tl1 tl2
 	| TInst ({cl_kind = KTypeParameter ttp1},tl1) , TInst ({cl_kind = KTypeParameter ttp2},tl2) when param <> EqCoreType ->
 		assign_type_params uctx ttp1 ttp2;
 		type_eq_params uctx a b tl1 tl2
 	| TInst (c1,tl1) , TInst (c2,tl2) ->
-		if c1 != c2 && not (param = EqCoreType && c1.cl_path = c2.cl_path) && (match c1.cl_kind, c2.cl_kind with KExpr _, KExpr _ -> false | _ -> true) then error [cannot_unify a b];
+		if follow_class c1 != follow_class c2 && not (param = EqCoreType && c1.cl_path = c2.cl_path) && (match c1.cl_kind, c2.cl_kind with KExpr _, KExpr _ -> false | _ -> true) then begin
+			note_dup_identity_failure c1 c2;
+			error [cannot_unify a b]
+		end;
 		type_eq_params uctx a b tl1 tl2
 	| TFun (l1,r1) , TFun (l2,r2) when List.length l1 = List.length l2 ->
 		let i = ref 0 in
@@ -672,7 +688,7 @@ let rec type_eq uctx a b =
 				let msg = if !i = 0 then Invalid_return_type else Invalid_function_argument(!i,List.length l1) in
 				error (cannot_unify a b :: msg :: l)
 		)
-	| TAbstract (a1,tl1) , TAbstract (a2,tl2) when a1 == a2 || (param = EqCoreType && a1.a_path = a2.a_path) ->
+	| TAbstract (a1,tl1) , TAbstract (a2,tl2) when follow_abstract a1 == follow_abstract a2 || (param = EqCoreType && a1.a_path = a2.a_path) ->
 		type_eq_params uctx a b tl1 tl2
 	| TAbstract (ab,tl) , _ when can_follow_abstract ab ->
 		type_eq uctx (apply_params ab.a_params tl ab.a_this) b
@@ -681,9 +697,9 @@ let rec type_eq uctx a b =
 	| TAnon a1, TAnon a2 ->
 		(try
 			(match !(a2.a_status) with
-			| ClassStatics c -> (match !(a1.a_status) with ClassStatics c2 when c == c2 -> () | _ -> error [])
-			| EnumStatics e -> (match !(a1.a_status) with EnumStatics e2 when e == e2 -> () | _ -> error [])
-			| AbstractStatics a -> (match !(a1.a_status) with AbstractStatics a2 when a == a2 -> () | _ -> error [])
+			| ClassStatics c -> (match !(a1.a_status) with ClassStatics c2 when follow_class c == follow_class c2 -> () | _ -> error [])
+			| EnumStatics e -> (match !(a1.a_status) with EnumStatics e2 when follow_enum e == follow_enum e2 -> () | _ -> error [])
+			| AbstractStatics a -> (match !(a1.a_status) with AbstractStatics a2 when follow_abstract a == follow_abstract a2 -> () | _ -> error [])
 			| _ -> ()
 			);
 			let fields = match !(a1.a_status) with
@@ -794,7 +810,7 @@ let rec unify (uctx : unification_context) a b =
 			(fun() -> try_apply_params_rec uctx.apply_params_stack t.t_params tl t.t_type (unify uctx a))
 			(fun l -> error (cannot_unify a b :: l))
 	| TEnum (ea,tl1) , TEnum (eb,tl2) ->
-		if ea != eb then error [cannot_unify a b];
+		if follow_enum ea != follow_enum eb then error [cannot_unify a b];
 		unify_type_params uctx a b tl1 tl2
 	| TAbstract ({a_path=[],"Null"},[t1]), TAbstract ({a_path=[],"Null"},[t2]) ->
 		(* Unify the wrapped types directly so a monomorph on either side binds to the
@@ -807,7 +823,7 @@ let rec unify (uctx : unification_context) a b =
 	| _,TAbstract ({a_path=[],"Null"},[t]) ->
 		begin try unify uctx a t
 		with Unify_error l -> error (cannot_unify a b :: l) end
-	| TAbstract (a1,tl1) , TAbstract (a2,tl2) when a1 == a2 ->
+	| TAbstract (a1,tl1) , TAbstract (a2,tl2) when follow_abstract a1 == follow_abstract a2 ->
 		begin try
 			unify_type_params uctx a b tl1 tl2
 		with Unify_error _ as err ->
@@ -833,7 +849,8 @@ let rec unify (uctx : unification_context) a b =
 		unify_type_params uctx a b tl1 tl2;
 	| TInst (c1,tl1) , TInst (c2,tl2) ->
 		let rec loop c tl =
-			if c == c2 then begin
+			let c = follow_class c in
+			if c == follow_class c2 then begin
 				unify_type_params uctx a b tl tl2;
 				true
 			end else (match c.cl_super with
@@ -853,7 +870,10 @@ let rec unify (uctx : unification_context) a b =
 				) (get_constraints ttp)
 			| _ -> false)
 		in
-		if not (loop c1 tl1) then error [cannot_unify a b]
+		if not (loop c1 tl1) then begin
+			note_dup_identity_failure c1 c2;
+			error [cannot_unify a b]
+		end
 	| TFun (l1,r1) , TFun (l2,r2) when List.length l1 = List.length l2 ->
 		let uctx = get_nested_context uctx in
 		let i = ref 0 in
@@ -1076,11 +1096,11 @@ and unify_anons uctx a b a1 a2 =
 			error (cannot_unify a b :: l)
 	in
 	begin match !(a1.a_status),!(a2.a_status) with
-		| ClassStatics c1,ClassStatics c2 when c1 == c2 ->
+		| ClassStatics c1,ClassStatics c2 when follow_class c1 == follow_class c2 ->
 			()
-		| EnumStatics en1,EnumStatics en2 when en1 == en2 ->
+		| EnumStatics en1,EnumStatics en2 when follow_enum en1 == follow_enum en2 ->
 			()
-		| AbstractStatics a1,AbstractStatics a2 when a1 == a2 ->
+		| AbstractStatics a1,AbstractStatics a2 when follow_abstract a1 == follow_abstract a2 ->
 			()
 		| Const,_ ->
 			unify_fields a1.a_fields (fun _ -> ()) (fun f2 ->
@@ -1224,13 +1244,13 @@ and unify_with_variance uctx f t1 t2 =
 		with Unify_error _ -> false
 	in
 	match t1,t2 with
-	| TInst(c1,tl1),TInst(c2,tl2) when c1 == c2 ->
+	| TInst(c1,tl1),TInst(c2,tl2) when follow_class c1 == follow_class c2 ->
 		unify_tls tl1 tl2
-	| TEnum(en1,tl1),TEnum(en2,tl2) when en1 == en2 ->
+	| TEnum(en1,tl1),TEnum(en2,tl2) when follow_enum en1 == follow_enum en2 ->
 		unify_tls tl1 tl2
-	| TAbstract(a1,tl1),TAbstract(a2,tl2) when a1 == a2 ->
+	| TAbstract(a1,tl1),TAbstract(a2,tl2) when follow_abstract a1 == follow_abstract a2 ->
 		unify_tls tl1 tl2
-	| TType(td1,tl1),TType(td2,tl2) when td1 == td2 ->
+	| TType(td1,tl1),TType(td2,tl2) when follow_typedef td1 == follow_typedef td2 ->
 		unify_tls tl1 tl2
 	| TType(td,tl),_ ->
 		unify_rec (fun() -> unify_with_variance uctx f (get_defined_type td tl) t2)

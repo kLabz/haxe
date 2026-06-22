@@ -332,6 +332,9 @@ and tclass = {
 		Populated automatically in post-processing step (Filters.run)
 	*)
 	mutable cl_descendants : tclass list;
+	(* Header pre-phase: when set, this class is a stale duplicate produced by the throwaway re-type;
+	   identity comparisons follow it to the canonical class (see [follow_class]). None in normal use. *)
+	mutable cl_forward : tclass option;
 }
 
 and tenum_field = {
@@ -361,6 +364,7 @@ and tenum = {
 	mutable e_flags : int;
 	mutable e_constrs : (string , tenum_field) PMap.t;
 	mutable e_names : string list;
+	mutable e_forward : tenum option; (* see [cl_forward] *)
 }
 
 and tdef = {
@@ -376,6 +380,7 @@ and tdef = {
 	mutable t_restore : unit -> unit;
 	(* do not insert any fields above *)
 	mutable t_type : t;
+	mutable t_forward : tdef option; (* see [cl_forward] *)
 }
 
 and tabstract = {
@@ -405,6 +410,7 @@ and tabstract = {
 	mutable a_constructor : tclass_field option;
 	mutable a_extern : bool;
 	mutable a_enum : bool;
+	mutable a_forward : tabstract option; (* see [cl_forward] *)
 }
 
 and module_type =
