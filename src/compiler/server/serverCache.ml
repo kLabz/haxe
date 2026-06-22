@@ -605,7 +605,17 @@ class hxb_reader_api_server
 	method resolve_type (pack : string list) (mname : string) (tname : string) full_restore =
 		let path = (pack,mname) in
 		let m = self#resolve_module path full_restore in
-		List.find (fun t -> snd (t_path t) = tname) m.m_types
+		try List.find (fun t -> snd (t_path t) = tname) m.m_types
+		with Not_found when Define.raw_defined com.defines "hxb.header_stats" ->
+			(* Diagnostic (STRIP later): the resolved module does not contain the requested type. Dump what
+			   it DOES contain, whether it is the lut's canonical object, and its cache state, to locate how
+			   a partial/leaked module reaches a transitive type reference (the "Cannot resolve type" wall). *)
+			let inlut = try if com.module_lut#find path == m then "lut-SAME" else "lut-DIFF" with Not_found -> "NOT-in-lut" in
+			let st = match m.m_extra.m_cache_state with MSGood -> "MSGood" | MSUnknown -> "MSUnknown" | MSBad _ -> "MSBad" in
+			Printf.eprintf "[hxbresolve] want=%s.%s %s state=%s added=%d m_types=[%s]\n%!"
+				(s_type_path path) tname inlut st m.m_extra.m_added
+				(String.concat "," (List.map (fun t -> snd (t_path t)) m.m_types));
+			raise Not_found
 
 	method resolve_module (path : path) full_restore =
 		match self#find_module path full_restore with
