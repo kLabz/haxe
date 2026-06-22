@@ -294,7 +294,9 @@ let retype_dirty_frontier_separate com tctx macros =
 		com2.error <- (fun _ _ -> ());
 		com2.error_ext <- (fun _ -> ());
 		let saved_has_error = com.part_scope.has_error in
-		let protect f = try f () with Stack_overflow | Out_of_memory as e -> raise e | _ -> () in
+		let protect f = try f () with
+			| Stack_overflow | Out_of_memory as e -> raise e
+			| e -> if dbg then Printf.eprintf "[ctx-prephase-swallowed] %s\n%!" (Printexc.to_string e) in
 		(try
 			let tctx2 = Setup.create_typer_context com2 macros in
 			(* What create_typer_context loaded (std) -- not our doing, must not get headers recorded. *)
