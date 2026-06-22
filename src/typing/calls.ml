@@ -12,17 +12,37 @@ open CallUnification
 (* Hot-swap extension for the inline path. A field's owning class may be a leaked PARTIAL copy produced
    by the isolated header pre-phase: a distinct object from the lut's canonical, whose inline body was
    deferred (cf_expr = None). follow_class chases such a (marked) stale object to the canonical class;
-   re-fetch the same-named field from it, which carries the real body. When the hot-swap is inactive
-   (resolvers are identity, e.g. no isolated pre-phase) follow_class returns the class unchanged, so this
-   is a no-op. Returns the original field if there is no canonical or the name is absent there. *)
-let canonical_field c cf =
+   re-fetch the same-named field from it, which carries the real body. CLASS AND FIELD MUST be swapped
+   TOGETHER: the field body and signature reference their class's type parameters, and so do the call
+   site's apply_params / `this` type -- mixing the leaked class's params with the canonical field's
+   leaves type parameters unsubstituted (e.g. "haxe.ds.Map.K should be ..."). When the hot-swap is
+   inactive (resolvers are identity) follow_class returns the class unchanged, so this is a no-op. *)
+let canonical_class_field c cf =
 	let c2 = follow_class c in
-	if c2 == c then cf
+	if c2 == c then (c,cf)
 	else
-		try PMap.find cf.cf_name c2.cl_statics
-		with Not_found ->
-		try PMap.find cf.cf_name c2.cl_fields
-		with Not_found -> cf
+		let cf2 =
+			try PMap.find cf.cf_name c2.cl_statics
+			with Not_found ->
+			try PMap.find cf.cf_name c2.cl_fields
+			with Not_found -> cf
+		in
+		(c2,cf2)
+
+(* As above but for a whole field access: canonicalize the host class (and, for abstracts, the abstract)
+   together with the field, so the access's type-parameter context stays consistent. *)
+let canonicalize_fa fa =
+	match fa.fa_host with
+	| FHStatic c ->
+		let c2,cf2 = canonical_class_field c fa.fa_field in
+		if c2 == c then fa else { fa with fa_host = FHStatic c2; fa_field = cf2 }
+	| FHInstance(c,tl) ->
+		let c2,cf2 = canonical_class_field c fa.fa_field in
+		if c2 == c then fa else { fa with fa_host = FHInstance(c2,tl); fa_field = cf2 }
+	| FHAbstract(a,tl,c) ->
+		let c2,cf2 = canonical_class_field c fa.fa_field in
+		if c2 == c then fa else { fa with fa_host = FHAbstract(follow_abstract a,tl,c2); fa_field = cf2 }
+	| _ -> fa
 
 let make_call ctx e params t ?(force_inline=false) p =
 	let params =
@@ -47,6 +67,14 @@ let make_call ctx e params t ?(force_inline=false) p =
 				ethis,co,cf
 			| _ ->
 				raise Exit
+		in
+		(* If both bodies are missing, [f]/[cl] may be a leaked partial copy from the isolated pre-phase;
+		   recover the canonical class+field together (keeps type parameters consistent). No-op without
+		   the hot-swap. *)
+		let cl,f = match cl with
+			| Some c when f.cf_expr_unoptimized = None && f.cf_expr = None ->
+				let c2,f2 = canonical_class_field c f in Some c2, f2
+			| _ -> cl,f
 		in
 		if not force_inline then begin
 			if not (needs_inline ctx cl f) then raise Exit;
@@ -82,13 +110,6 @@ let make_call ctx e params t ?(force_inline=false) p =
 		);
 		let params = List.map (Optimizer.reduce_expression (SafeCom.of_typer ctx)) params in
 		let force_inline = is_forced_inline cl f in
-		(* If both optimized and unoptimized bodies are missing, [f] may be from a leaked partial copy
-		   of its class (isolated pre-phase); recover the canonical field, which has the body. No-op
-		   without the hot-swap. *)
-		let f = match cl with
-			| Some c when f.cf_expr_unoptimized = None && f.cf_expr = None -> canonical_field c f
-			| _ -> f
-		in
 		let inline fd =
 			Inline.type_inline (Inline.context_of_typer ctx) f fd ethis params t config p force_inline
 		in
@@ -139,7 +160,7 @@ let probe_recursive_inline ctx where cf cm =
 
 let mk_array_get_call ctx (cf,tf,r,e1) c ebase p =
 	(* A leaked partial copy of [c] has cf_expr = None; recover the real field from the canonical class. *)
-	let cf = match cf.cf_expr with None -> canonical_field c cf | _ -> cf in
+	let c,cf = match cf.cf_expr with None -> canonical_class_field c cf | _ -> (c,cf) in
 	match cf.cf_expr with
 	| None when not (has_class_field_flag cf CfExtern) ->
 		probe_recursive_inline ctx "array-get" cf (Some c.cl_module);
@@ -152,7 +173,7 @@ let mk_array_get_call ctx (cf,tf,r,e1) c ebase p =
 
 let mk_array_set_call ctx (cf,tf,r,e1,evalue) c ebase p =
 	(* A leaked partial copy of [c] has cf_expr = None; recover the real field from the canonical class. *)
-	let cf = match cf.cf_expr with None -> canonical_field c cf | _ -> cf in
+	let c,cf = match cf.cf_expr with None -> canonical_class_field c cf | _ -> (c,cf) in
 	match cf.cf_expr with
 		| None when not (has_class_field_flag cf CfExtern) ->
 			if not (Meta.has Meta.NoExpr cf.cf_meta) then display_error ctx.com "Recursive array set method" p;
@@ -172,7 +193,8 @@ let rec acc_get ctx g =
 		let cf = fa.fa_field in
 		(* If the field has no body it may belong to a leaked partial copy of its class (isolated
 		   pre-phase); recover the canonical field, which carries the body. No-op without the hot-swap. *)
-		let cf = if cf.cf_expr = None then (match fa.fa_host with FHStatic c | FHInstance(c,_) | FHAbstract(_,_,c) -> canonical_field c cf | _ -> cf) else cf in
+		let fa = if cf.cf_expr = None then canonicalize_fa fa else fa in
+		let cf = fa.fa_field in
 		let p = fa.fa_pos in
 		(* do not create a closure for static calls *)
 		let apply_params = match fa.fa_host with
