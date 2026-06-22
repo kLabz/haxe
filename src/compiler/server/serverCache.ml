@@ -325,6 +325,26 @@ let record_prephase_closure com before =
 			| _ -> ()
 		) ()
 
+(* After the pre-phase recorded its header deltas, undo the conservative dirty-marking it did on the
+   seeds' DEPENDENCY peers. The pre-phase types each seed by walking its dependency graph while the delta
+   table is still empty, so every transitively-dirty peer is marked MSBad(DependencyDirty) with
+   m_checked = this round. Without resetting, step-2 and the main pass inherit that (the m_checked gate
+   skips re-evaluation) and re-type the whole cyclic SCC from source. Resetting the NON-seed peers lets
+   them be re-decided against the now-populated table: a peer dirty only by dependency on a seed whose
+   HEADER did not change is spared (restored from its still-valid cache) instead of re-typed. Genuinely
+   source-dirty seeds are left dirty so they are re-typed. Gated with the partial-dirty experiment. *)
+let reset_prephase_dirty_peers com =
+	if Define.defined com.defines Define.HxbHeaderInvalidation && Define.defined com.defines Define.HxbPrephasePartialDirty then begin
+		let cc = CommonCache.get_cache com in
+		(* check_module reads/mutates the per-request COPIES in tmp_binary_cache (cc#get_hxb_module), not
+		   the pristine binary_cache entries, so the pre-phase's conservative dirty-marking lives there.
+		   Dropping the temp cache makes step-2 and the main pass rebuild fresh copies from binary_cache
+		   and re-decide each module against the now-populated header-delta table -- so a peer dirty only
+		   by dependency on a seed whose header did not change is spared (restored from cache) instead of
+		   inheriting the pre-phase's re-type. The genuinely-tainted seeds stay MSBad in binary_cache. *)
+		cc#clear_temp_cache
+	end
+
 (* The dirty frontier: cached source modules whose own file changed (the roots of invalidation).
    Used by the phase-1 pre-phase to re-type these FIRST, so their fresh headers are available when
    [dependency_change_observable] decides whether their dependents can be spared. This is only a
@@ -768,34 +788,53 @@ and type_module sctx com delay mpath p =
 		| BinaryModule mc ->
 			(* Similarly, we only know that a binary module wasn't explicitly tainted. Decode it only after
 			   checking dependencies. This means that the actual decoding never has any reason to fail. *)
+			let decode typing_mode =
+				if !prephase_partial_mode && typing_mode = AllowPartialTyping then Hashtbl.replace prephase_partial_paths mpath ();
+				let reader = new HxbReader.hxb_reader mpath com.hxb_reader_stats (if Common.defined com Define.HxbTimes then Some com.timer_ctx else None) in
+				let api = match com.hxb_reader_api with
+					| Some api ->
+						api
+					| None ->
+						let api = (new hxb_reader_api_server com cc delay :> HxbReaderApi.hxb_reader_api) in
+						com.hxb_reader_api <- Some api;
+						api
+				in
+				let f_next chunks until =
+					let macro = if com.is_macro_context then " (macro)" else "" in
+					Timer.time com.timer_ctx ["server";"module cache";"hxb read" ^ macro;"until " ^ (string_of_chunk_kind until)] (reader#read_chunks_until api chunks until) typing_mode
+				in
+
+				let m,chunks = f_next mc.mc_chunks EOT in
+
+				(* A signature-only restore is a valid view of the module, so mark it good (mirrors
+				   get_hxb_module's AllowPartialTyping branch). Needed for the partial-dirty case: the
+				   cache entry the decoded m_extra was copied from may be MSBad(DependencyDirty), and
+				   add_modules rejects a non-MSGood module under dms_full_typing. *)
+				if typing_mode = AllowPartialTyping then m.m_extra.m_cache_state <- MSGood;
+
+				(* We try to avoid reading expressions as much as possible, so we only do this for
+				   our current display file if we're in display mode. *)
+				(match typing_mode with
+				| FullTyping -> ignore(f_next chunks EOM)
+				| AllowPartialTyping -> delay PConnectField (fun () -> ignore(f_next chunks EOF)));
+				incr com.request_scope.stats.s_modules_restored;
+				add_modules true m
+			in
 			begin match check_module sctx mpath mc.mc_extra p with
 				| None ->
-					let reader = new HxbReader.hxb_reader mpath com.hxb_reader_stats (if Common.defined com Define.HxbTimes then Some com.timer_ctx else None) in
-					let typing_mode = get_typing_mode com mc.mc_extra in
-					let api = match com.hxb_reader_api with
-						| Some api ->
-							api
-						| None ->
-							let api = (new hxb_reader_api_server com cc delay :> HxbReaderApi.hxb_reader_api) in
-							com.hxb_reader_api <- Some api;
-							api
-					in
-					let f_next chunks until =
-						let macro = if com.is_macro_context then " (macro)" else "" in
-						Timer.time com.timer_ctx ["server";"module cache";"hxb read" ^ macro;"until " ^ (string_of_chunk_kind until)] (reader#read_chunks_until api chunks until) typing_mode
-					in
-
-					let m,chunks = f_next mc.mc_chunks EOT in
-
-					(* We try to avoid reading expressions as much as possible, so we only do this for
-					   our current display file if we're in display mode. *)
-					(match typing_mode with
-					| FullTyping -> ignore(f_next chunks EOM)
-					| AllowPartialTyping -> delay PConnectField (fun () -> ignore(f_next chunks EOF)));
-					incr com.request_scope.stats.s_modules_restored;
-					add_modules true m;
+					decode (get_typing_mode com mc.mc_extra)
 				| Some reason ->
-					skip mpath reason
+					(* Phase 2 increment 2 (-D hxb.prephase-partial-dirty): during the isolated pre-phase, a
+					   peer that is dirty ONLY by dependency (DependencyDirty -- its own source is unchanged)
+					   still has a valid cached signature. Restore it signature-only from its hxb instead of
+					   skipping (which forces a full re-type from source), so computing an edited seed's header
+					   does not drag its whole cyclic SCC's bodies. Gated, and only in the pre-phase whose
+					   throwaway objects are discarded; the main pass still skips genuinely-dirty modules. *)
+					(match reason with
+					| DependencyDirty _ when !prephase_partial_mode && Define.defined com.defines Define.HxbPrephasePartialDirty ->
+						decode AllowPartialTyping
+					| _ ->
+						skip mpath reason)
 			end
 		| BadBinaryModule (_, reason) ->
 			(* A BadModule state here means that the module is already invalidated in the cache, e.g. from server/invalidate. *)

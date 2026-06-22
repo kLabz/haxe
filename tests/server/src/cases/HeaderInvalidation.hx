@@ -122,11 +122,15 @@ class HeaderInvalidation extends TestCase {
 		runHaxe(args);
 		assertSuccess();
 
-		// Body-only edit of CycA (signature unchanged): CycC's used signature is unchanged -> spared.
+		// Body-only edit of CycA (signature unchanged). The cyclic peer CycB is dirty only by dependency
+		// on CycA; since CycA's header is unchanged it must be RESTORED from cache (reused), not re-typed
+		// from source -- this is the increment-2 win (the SCC is not re-typed). The external dependent
+		// CycC is spared too.
 		vfs.putContent("CycA.hx", getTemplate("HeaderInvalidation/CycA.hx").replace("return 1", "return 2"));
 		runHaxeJson([], ServerMethods.Invalidate, {file: new FsPath("CycA.hx")});
 		runHaxe(args);
 		assertSuccess();
+		assertReuse("CycB");
 		assertReuse("CycC");
 
 		// Signature edit of CycA.ping (extra defaulted arg keeps CycC's call valid): CycC depends on

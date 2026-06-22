@@ -376,6 +376,11 @@ let retype_dirty_frontier com tctx =
 		restore_messages ();
 		if partial then
 			ServerCache.prephase_partial_mode := false;
+		(* Undo the pre-phase's conservative dirty-marking on the seeds' non-seed dependency peers, so
+		   step-2 and the main pass re-decide them against the now-populated header-delta table (a peer
+		   dirty only by dependency on a seed whose header did not change is restored from cache, not
+		   re-typed). Must run before step-2's seed re-type, which pulls those peers. *)
+		ServerCache.reset_prephase_dirty_peers com;
 		(* Hot-swap: a pre-phase leak produces distinct (stale) type objects for paths the throwaway loop
 		   pulled in; those leak into the main compile and clash with the canonical objects as duplicate
 		   identity, and -- worse -- sit inside canonical classes' super/implements chains. Tag every stale
