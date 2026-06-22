@@ -207,6 +207,8 @@ let reset_spare_stats () =
    header and the freshly-typed new one are in hand — and consulted during the dependency check, so
    the check never relies on [module_lut] (which is empty at that point). Reset each compile. *)
 let header_deltas : (Digest.t * path, ModuleHeader.header_change list * module_def) Hashtbl.t = Hashtbl.create 0
+(* Diagnostic (STRIP later): cap on how many old-vs-new leaf dumps to print per compile. *)
+let hdiff_detail_budget = ref 30
 (* Diagnostic: path -> signature(s) of frontier modules, to detect (sign,path) key mismatches. *)
 let header_delta_paths : (path, Digest.t) Hashtbl.t = Hashtbl.create 0
 (* Diagnostic: distinct paths that hit the no-delta (conservative) branch -> why they were dirty. *)
@@ -218,7 +220,7 @@ let header_baselines : (Digest.t * path, module_header option) Hashtbl.t = Hasht
 
 let reset_header_deltas () =
 	Hashtbl.clear header_deltas; Hashtbl.clear header_delta_paths; Hashtbl.clear header_no_delta_sample;
-	Hashtbl.clear header_baselines
+	Hashtbl.clear header_baselines; hdiff_detail_budget := 30
 
 (* Opt-in diagnostic (-D hxb.header_stats); kept off the normal stderr so it can't trip
    assertSilence in the test suite. *)
@@ -251,9 +253,26 @@ let note_retyped_module com m =
 			let changes = ModuleHeader.header_diff old_header new_header in
 			(* Diagnostic (STRIP later): on a whitespace/no-op edit every diff must be empty. Any non-empty
 			   diff here is a header-stability / separate-context-determinism bug (false invalidation). *)
-			if Define.raw_defined com.defines "hxb.header_stats" && changes <> [] then
+			if Define.raw_defined com.defines "hxb.header_stats" && changes <> [] then begin
 				print_endline (Printf.sprintf "[header-diff] %s: %s" (s_type_path m.m_path)
 					(String.concat ", " (List.map ModuleHeader.s_header_change changes)));
+				(* Capped side-by-side dump: for CHANGED fields/structs (same key, different leaf), show
+				   old vs new so we can tell name- vs signature-non-determinism. Added/Removed are name churn. *)
+				List.iter (fun ch ->
+					if !hdiff_detail_budget > 0 then
+					let dump tn keyopt old_s new_s =
+						decr hdiff_detail_budget;
+						Printf.eprintf "[hdiff] %s %s%s\n  old=%s\n  new=%s\n%!" (s_type_path m.m_path) tn
+							(match keyopt with Some k -> "."^k | None -> " ~struct") old_s new_s
+					in
+					let field_leaf h tn key = try PMap.find key (PMap.find tn h.mh_decls).hd_fields with Not_found -> "<none>" in
+					let struct_sig h tn = try (PMap.find tn h.mh_decls).hd_struct with Not_found -> "<none>" in
+					match ch with
+					| ModuleHeader.HCFieldChanged(tn,key) -> dump tn (Some key) (field_leaf old_header tn key) (field_leaf new_header tn key)
+					| ModuleHeader.HCStructural tn -> dump tn None (struct_sig old_header tn) (struct_sig new_header tn)
+					| _ -> ()
+				) changes
+			end;
 			Hashtbl.replace header_deltas (sign,m.m_path) (changes,m);
 			Hashtbl.replace header_delta_paths m.m_path sign
 	end
