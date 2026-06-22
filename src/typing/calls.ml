@@ -91,8 +91,33 @@ let make_call ctx e params t ?(force_inline=false) p =
 	with Exit ->
 		mk (TCall (e,params)) t p
 
+(* Diagnostic (gated -D hxb.header_stats): dump the context of a recursive-inline failure -- the field
+   being inlined, whether its body (cf_expr) is missing (a partial/signature-only restore leaves it None),
+   the owning peer module's cache state and whether it is the lut's canonical object, and whether we are
+   in the header pre-phase or the main compile. Helps locate how a partial peer reaches an inline site. *)
+let probe_recursive_inline ctx where cf cm =
+	if Define.raw_defined ctx.com.defines "hxb.header_stats" then begin
+		let modinfo = match cm with
+			| Some m ->
+				let st = match m.m_extra.m_cache_state with
+					| MSGood -> "MSGood" | MSUnknown -> "MSUnknown"
+					| MSBad r -> "MSBad:" ^ Printer.s_module_skip_reason r
+				in
+				let inlut = try if ctx.com.module_lut#find m.m_path == m then "in-lut(SAME)" else "in-lut(DIFF)" with Not_found -> "NOT-in-lut" in
+				Printf.sprintf "peer=%s state=%s added=%d %s" (s_type_path m.m_path) st m.m_extra.m_added inlut
+			| None -> "peer=?"
+		in
+		Printf.eprintf "[recinline %s] prephase=%s field=%s expr=%s unopt=%s postproc=%b extern=%b curmod=%s step=%d %s\n%!"
+			where !header_prephase_active cf.cf_name
+			(match cf.cf_expr with None -> "NONE" | Some _ -> "set")
+			(match cf.cf_expr_unoptimized with None -> "none" | Some _ -> "set")
+			(has_class_field_flag cf CfPostProcessed) (has_class_field_flag cf CfExtern)
+			(s_type_path ctx.m.curmod.m_path) ctx.com.part_scope.compilation_step modinfo
+	end
+
 let mk_array_get_call ctx (cf,tf,r,e1) c ebase p = match cf.cf_expr with
 	| None when not (has_class_field_flag cf CfExtern) ->
+		probe_recursive_inline ctx "array-get" cf (Some c.cl_module);
 		if not (Meta.has Meta.NoExpr cf.cf_meta) then display_error ctx.com "Recursive array get method" p;
 		mk (TArray(ebase,e1)) r p
 	| _ ->
@@ -191,6 +216,7 @@ let rec acc_get ctx g =
 			if not (type_iseq tf e.etype) then mk (TCast(e,None)) tf e.epos
 			else e
 		| Var _,None ->
+			probe_recursive_inline ctx "var-none" cf (match fa.fa_host with FHStatic c | FHInstance(c,_) | FHAbstract(_,_,c) -> Some c.cl_module | _ -> None);
 			raise_typing_error "Recursive inline is not supported" p
 		end
 	in

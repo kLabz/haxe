@@ -335,6 +335,7 @@ let retype_dirty_frontier com tctx =
 			ServerCache.prephase_partial_mode := true;
 			Hashtbl.clear ServerCache.prephase_partial_paths
 		end;
+			Typecore.header_prephase_active := "loop";
 		(* The isolated pre-phase is a throwaway: its only sound output is the header deltas recorded as it
 		   goes; the re-typed modules are dropped. Re-typing seeds/peers from a partially-restored closure
 		   exercises inline / default-arg / unification paths that can fail in MANY ways (Error.Error,
@@ -421,6 +422,7 @@ let retype_dirty_frontier com tctx =
 		   load-bearing: inline / @:generic cf_expr bodies are not forced until PFinal, so without it a
 		   spared dependent that inlines a seed's field finds cf_expr = None (recursive array get / no
 		   inline). The committed non-isolated pre-phase relies on the same flush. *)
+		Typecore.header_prephase_active := "step2";
 		if isolate then begin
 			List.iter (fun mpath ->
 				(* Same guard shape as the loop above: keep the PBuildClass flush inside the try so a
@@ -435,6 +437,7 @@ let retype_dirty_frontier com tctx =
 			with Error.Error _ | Error.Fatal_error _ ->
 				())
 		end;
+		Typecore.header_prephase_active := "off";
 		if dbg then begin
 			let full = !(com.hxb_reader_stats.modules_fully_restored) - full0 in
 			let part = !(com.hxb_reader_stats.modules_partially_restored) - part0 in

@@ -141,4 +141,46 @@ class HeaderInvalidation extends TestCase {
 		assertSuccess();
 		Assert.isFalse(hasMessage("reusing CycC"));
 	}
+
+	// Soundness guard (partial-dirty): the edited seed RecSeed inlines an inline field of its cyclic peer
+	// RecPeer, which is partial-restored while RecSeed's header is computed. Inlining a peer whose body
+	// was deferred must stay sound (no cf_expr=None leaking into an inline site). NOTE: this does NOT yet
+	// reproduce the real-project "Recursive inline is not supported" -- that needs project specifics
+	// (deeper SCC / cdb enum-abstracts in the `before` set / @:build); kept as a regression guard.
+	function testRecursiveInlinePeer() {
+		vfs.putContent("RecPeer.hx", getTemplate("HeaderInvalidation/RecPeer.hx"));
+		vfs.putContent("RecSeed.hx", getTemplate("HeaderInvalidation/RecSeed.hx"));
+		vfs.putContent("RecMain.hx", getTemplate("HeaderInvalidation/RecMain.hx"));
+		var args = ["-main", "RecMain", "--no-output", "-js", "no.js", "-D", "hxb.header-invalidation",
+			"-D", "hxb.prephase-isolate", "-D", "hxb.prephase-partial", "-D", "hxb.prephase-partial-dirty"];
+		runHaxe(args);
+		assertSuccess();
+
+		vfs.putContent("RecSeed.hx", getTemplate("HeaderInvalidation/RecSeed.hx").replace("+ 1", "+ 2"));
+		runHaxeJson([], ServerMethods.Invalidate, {file: new FsPath("RecSeed.hx")});
+		runHaxe(args);
+		assertSuccess();
+	}
+
+	// Soundness guard (partial-dirty): default-arg inline of an enum-abstract value (the real-project
+	// shape). EADep.f has a default arg `EAKind.Any` (inline enum-abstract value); EASeed references
+	// EAKind, so the pre-phase pulls it in partial. A signature edit of EASeed re-types EADep, whose
+	// default-arg typing inlines EAKind.Any -- must stay sound. NOTE: this does NOT yet reproduce the
+	// real-project recursive-inline error either (same project-specificity caveat as above).
+	function testEnumAbstractDefaultArgInline() {
+		vfs.putContent("EAKind.hx", getTemplate("HeaderInvalidation/EAKind.hx"));
+		vfs.putContent("EASeed.hx", getTemplate("HeaderInvalidation/EASeed.hx"));
+		vfs.putContent("EADep.hx", getTemplate("HeaderInvalidation/EADep.hx"));
+		vfs.putContent("EAMain.hx", getTemplate("HeaderInvalidation/EAMain.hx"));
+		var args = ["-main", "EAMain", "--no-output", "-js", "no.js", "-D", "hxb.header-invalidation",
+			"-D", "hxb.prephase-isolate", "-D", "hxb.prephase-partial", "-D", "hxb.prephase-partial-dirty"];
+		runHaxe(args);
+		assertSuccess();
+
+		// Signature edit of EASeed.v -> EADep (depends on EASeed) is re-typed.
+		vfs.putContent("EASeed.hx", getTemplate("HeaderInvalidation/EASeed.hx").replace("v():EAKind", "v(?extra:Int):EAKind"));
+		runHaxeJson([], ServerMethods.Invalidate, {file: new FsPath("EASeed.hx")});
+		runHaxe(args);
+		assertSuccess();
+	}
 }

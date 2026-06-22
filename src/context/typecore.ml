@@ -167,6 +167,10 @@ and typer = {
 	memory_marker : float array;
 }
 
+(* Diagnostic (header pre-phase): which sub-phase is running ("loop" = isolated throwaway re-type,
+   "step2" = shared seed materialization, "off" = real compile), so probes can attribute a message. *)
+let header_prephase_active = ref "off"
+
 let pass_name = function
 	| PBuildModule -> "build-module"
 	| PBuildClass -> "build-class"
