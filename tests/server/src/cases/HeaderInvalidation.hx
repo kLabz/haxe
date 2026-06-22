@@ -183,4 +183,24 @@ class HeaderInvalidation extends TestCase {
 		runHaxe(args);
 		assertSuccess();
 	}
+
+	// Repro attempt for the GENERIC type-parameter leak ("haxe.ds.Map.V should be X"): GMap is a generic
+	// abstract pulled into the pre-phase (partial) via the GSeed<->GUser cycle. Editing GSeed's signature
+	// re-types GUser, which calls GMap<String,Int>.get -> if a leaked partial GMap reaches the main compile,
+	// its type parameter V does not substitute and unification fails. Must stay sound.
+	function testGenericTypeParamLeak() {
+		vfs.putContent("GMap.hx", getTemplate("HeaderInvalidation/GMap.hx"));
+		vfs.putContent("GSeed.hx", getTemplate("HeaderInvalidation/GSeed.hx"));
+		vfs.putContent("GUser.hx", getTemplate("HeaderInvalidation/GUser.hx"));
+		vfs.putContent("GMain.hx", getTemplate("HeaderInvalidation/GMain.hx"));
+		var args = ["-main", "GMain", "--no-output", "-js", "no.js", "-D", "hxb.header-invalidation",
+			"-D", "hxb.prephase-isolate", "-D", "hxb.prephase-partial"];
+		runHaxe(args);
+		assertSuccess();
+
+		vfs.putContent("GSeed.hx", getTemplate("HeaderInvalidation/GSeed.hx").replace("v():Int", "v(?extra:Int):Int"));
+		runHaxeJson([], ServerMethods.Invalidate, {file: new FsPath("GSeed.hx")});
+		runHaxe(args);
+		assertSuccess();
+	}
 }
