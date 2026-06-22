@@ -9,6 +9,21 @@ open Fields
 open Error
 open CallUnification
 
+(* Hot-swap extension for the inline path. A field's owning class may be a leaked PARTIAL copy produced
+   by the isolated header pre-phase: a distinct object from the lut's canonical, whose inline body was
+   deferred (cf_expr = None). follow_class chases such a (marked) stale object to the canonical class;
+   re-fetch the same-named field from it, which carries the real body. When the hot-swap is inactive
+   (resolvers are identity, e.g. no isolated pre-phase) follow_class returns the class unchanged, so this
+   is a no-op. Returns the original field if there is no canonical or the name is absent there. *)
+let canonical_field c cf =
+	let c2 = follow_class c in
+	if c2 == c then cf
+	else
+		try PMap.find cf.cf_name c2.cl_statics
+		with Not_found ->
+		try PMap.find cf.cf_name c2.cl_fields
+		with Not_found -> cf
+
 let make_call ctx e params t ?(force_inline=false) p =
 	let params =
 		match follow e.etype with
@@ -67,6 +82,13 @@ let make_call ctx e params t ?(force_inline=false) p =
 		);
 		let params = List.map (Optimizer.reduce_expression (SafeCom.of_typer ctx)) params in
 		let force_inline = is_forced_inline cl f in
+		(* If both optimized and unoptimized bodies are missing, [f] may be from a leaked partial copy
+		   of its class (isolated pre-phase); recover the canonical field, which has the body. No-op
+		   without the hot-swap. *)
+		let f = match cl with
+			| Some c when f.cf_expr_unoptimized = None && f.cf_expr = None -> canonical_field c f
+			| _ -> f
+		in
 		let inline fd =
 			Inline.type_inline (Inline.context_of_typer ctx) f fd ethis params t config p force_inline
 		in
@@ -115,7 +137,10 @@ let probe_recursive_inline ctx where cf cm =
 			(s_type_path ctx.m.curmod.m_path) ctx.com.part_scope.compilation_step modinfo
 	end
 
-let mk_array_get_call ctx (cf,tf,r,e1) c ebase p = match cf.cf_expr with
+let mk_array_get_call ctx (cf,tf,r,e1) c ebase p =
+	(* A leaked partial copy of [c] has cf_expr = None; recover the real field from the canonical class. *)
+	let cf = match cf.cf_expr with None -> canonical_field c cf | _ -> cf in
+	match cf.cf_expr with
 	| None when not (has_class_field_flag cf CfExtern) ->
 		probe_recursive_inline ctx "array-get" cf (Some c.cl_module);
 		if not (Meta.has Meta.NoExpr cf.cf_meta) then display_error ctx.com "Recursive array get method" p;
@@ -126,6 +151,8 @@ let mk_array_get_call ctx (cf,tf,r,e1) c ebase p = match cf.cf_expr with
 		make_call ctx ef [ebase;e1] r p
 
 let mk_array_set_call ctx (cf,tf,r,e1,evalue) c ebase p =
+	(* A leaked partial copy of [c] has cf_expr = None; recover the real field from the canonical class. *)
+	let cf = match cf.cf_expr with None -> canonical_field c cf | _ -> cf in
 	match cf.cf_expr with
 		| None when not (has_class_field_flag cf CfExtern) ->
 			if not (Meta.has Meta.NoExpr cf.cf_meta) then display_error ctx.com "Recursive array set method" p;
@@ -143,6 +170,9 @@ let abstract_using_param_type sea = match follow sea.se_this.etype with
 let rec acc_get ctx g =
 	let inline_read fa =
 		let cf = fa.fa_field in
+		(* If the field has no body it may belong to a leaked partial copy of its class (isolated
+		   pre-phase); recover the canonical field, which carries the body. No-op without the hot-swap. *)
+		let cf = if cf.cf_expr = None then (match fa.fa_host with FHStatic c | FHInstance(c,_) | FHAbstract(_,_,c) -> canonical_field c cf | _ -> cf) else cf in
 		let p = fa.fa_pos in
 		(* do not create a closure for static calls *)
 		let apply_params = match fa.fa_host with
