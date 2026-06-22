@@ -302,6 +302,34 @@ let retype_dirty_frontier com tctx =
 			com.module_lut <- fresh
 		end;
 		let restore_lut () = if isolate then com.module_lut <- saved_lut in
+		(* The isolated pre-phase is a throwaway computation: it re-types seeds and (under partial mode)
+		   signature-only restores their clean peers into a throwaway lut, solely to record header deltas.
+		   Its compiler messages are NOT user-facing -- the real compile re-types/restores everything and
+		   emits every genuine warning/error. A seed that inlines a partial peer whose body was deferred
+		   (cf_expr = None) produces spurious WInlineOptimizedField warnings and "Recursive inline" /
+		   "Recursive array get" errors (verified: codegen output is identical with the pre-phase off vs
+		   on). These must not leak out. The try/with guards below only catch errors that PROPAGATE as
+		   exceptions; the typer's own recovery (raise_or_display_error -> com.error_ext) records many
+		   errors WITHOUT re-raising, and warnings never raise -- both reach the user unless muted. So mute
+		   the warning/error message channels for the duration of the isolated pre-phase and roll back
+		   has_error (an inline failure on a discarded peer must not mark the whole compilation as failed). *)
+		let saved_warning = com.warning in
+		let saved_error = com.error in
+		let saved_error_ext = com.error_ext in
+		let saved_has_error = com.part_scope.has_error in
+		if isolate then begin
+			com.warning <- (fun ?depth:_ _ _ _ _ -> ());
+			com.error <- (fun _ _ -> ());
+			com.error_ext <- (fun _ -> ())
+		end;
+		let restore_messages () =
+			if isolate then begin
+				com.warning <- saved_warning;
+				com.error <- saved_error;
+				com.error_ext <- saved_error_ext;
+				com.part_scope.has_error <- saved_has_error
+			end
+		in
 		if partial then begin
 			ServerCache.prephase_partial_mode := true;
 			Hashtbl.clear ServerCache.prephase_partial_paths
@@ -323,9 +351,11 @@ let retype_dirty_frontier com tctx =
 			ServerCache.record_prephase_closure com before
 		with e ->
 			restore_lut ();
+			restore_messages ();
 			if partial then ServerCache.prephase_partial_mode := false;
 			raise e);
 		restore_lut ();
+		restore_messages ();
 		if partial then
 			ServerCache.prephase_partial_mode := false;
 		(* Step 2 (shared seed materialization): the isolated computation above produced only header

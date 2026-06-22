@@ -86,4 +86,23 @@ class HeaderInvalidation extends TestCase {
 		runHaxe(args);
 		assertSuccess();
 	}
+
+	// As above but the clean peer exposes an inline VAR (and an inline function using it). Inlining a
+	// var whose body was deferred to None takes the acc_get `Var _,None` path and RAISES "Recursive
+	// inline is not supported" -- which the typer's error recovery records via com.error_ext WITHOUT
+	// re-raising, so it bypasses the pre-phase try/with and reaches the user unless the pre-phase mutes
+	// its diagnostics. This case fails (assertSuccess) without that muting.
+	function testPartialPeerLeakInlineVar() {
+		vfs.putContent("PeerVar.hx", getTemplate("HeaderInvalidation/PeerVar.hx"));
+		vfs.putContent("SeedRefVar.hx", getTemplate("HeaderInvalidation/SeedRefVar.hx"));
+		vfs.putContent("MainVar.hx", getTemplate("HeaderInvalidation/MainVar.hx"));
+		var args = ["-main", "MainVar", "--no-output", "-js", "no.js", "-D", "hxb.header-invalidation", "-D", "hxb.prephase-isolate", "-D", "hxb.prephase-partial"];
+		runHaxe(args);
+		assertSuccess();
+
+		vfs.putContent("SeedRefVar.hx", getTemplate("HeaderInvalidation/SeedRefVar.hx").replace("get():Int", "get():Float"));
+		runHaxeJson([], ServerMethods.Invalidate, {file: new FsPath("SeedRefVar.hx")});
+		runHaxe(args);
+		assertSuccess();
+	}
 }
