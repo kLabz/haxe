@@ -249,6 +249,11 @@ let note_retyped_module com m =
 			let new_header = ModuleHeader.module_header_of m in
 			m.m_extra.m_header <- Some new_header;
 			let changes = ModuleHeader.header_diff old_header new_header in
+			(* Diagnostic (STRIP later): on a whitespace/no-op edit every diff must be empty. Any non-empty
+			   diff here is a header-stability / separate-context-determinism bug (false invalidation). *)
+			if Define.raw_defined com.defines "hxb.header_stats" && changes <> [] then
+				print_endline (Printf.sprintf "[header-diff] %s: %s" (s_type_path m.m_path)
+					(String.concat ", " (List.map ModuleHeader.s_header_change changes)));
 			Hashtbl.replace header_deltas (sign,m.m_path) (changes,m);
 			Hashtbl.replace header_delta_paths m.m_path sign
 	end
