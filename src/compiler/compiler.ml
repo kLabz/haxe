@@ -267,6 +267,68 @@ let check_defines com =
    [module_lut]. [ServerCache.dependency_change_observable] compares these against the cached (old)
    headers to spare dependents whose used signatures did not change. Compile errors are ignored
    here: a genuine error in a reachable module resurfaces in the main pass below. *)
+(* Phase 2 separate-context pre-phase (-D hxb.prephase-context). Run the dirty frontier in its OWN cloned
+   compilation context (own module_lut / typer globals / basic), sharing only the module cache for reading.
+   Compute and hand back ONLY the header deltas (module-level [ServerCache.header_deltas], independent of any
+   com). NOTHING the pre-phase typed crosses into the main compile: the throwaway com is dropped, so the
+   duplicate-object leak that sank the in-place lut-swap (-D hxb.prephase-isolate) cannot occur. The main
+   compile then needs no isolate/step2 -- it is the normal compile, and the dependency-spare logic uses the
+   handed-back deltas. *)
+let retype_dirty_frontier_separate com tctx macros =
+	let dbg = Define.raw_defined com.defines "hxb.header_stats" in
+	match ServerCache.collect_dirty_frontier com with
+	| [] ->
+		if dbg then Printf.eprintf "[header-invalidation] frontier(ctx): 0 modules\n%!"
+	| paths ->
+		if dbg then Printf.eprintf "[header-invalidation] frontier(ctx): %d modules [%s]\n%!"
+			(List.length paths) (String.concat ", " (List.map s_type_path paths));
+		let t0 = Extc.time () in
+		(* A separate, throwaway compilation context. clone shares the cache (cs), part_scope, sctx, defines;
+		   it re-inits module_lut / types / basic / callbacks, so it must be made compile-ready: share the
+		   class paths and extern loaders, then create_typer_context loads std into it from the shared cache.
+		   Its messages must be muted (throwaway) and part_scope.has_error rolled back (shared with main). *)
+		let com2 = Common.clone com com.is_macro_context in
+		com2.class_paths <- com.class_paths;
+		com2.load_extern_type <- com.load_extern_type;
+		com2.warning <- (fun ?depth:_ _ _ _ _ -> ());
+		com2.error <- (fun _ _ -> ());
+		com2.error_ext <- (fun _ -> ());
+		let saved_has_error = com.part_scope.has_error in
+		let protect f = try f () with Stack_overflow | Out_of_memory as e -> raise e | _ -> () in
+		(try
+			let tctx2 = Setup.create_typer_context com2 macros in
+			(* What create_typer_context loaded (std) -- not our doing, must not get headers recorded. *)
+			let before2 = Hashtbl.create 0 in
+			com2.module_lut#iter (fun path _ -> Hashtbl.replace before2 path ());
+			List.iter (fun mpath ->
+				protect (fun () ->
+					ignore (tctx2.Typecore.g.Typecore.do_load_module tctx2 mpath null_pos);
+					Typecore.flush_pass tctx2.Typecore.g PBuildClass "ctx-prephase")
+			) paths;
+			protect (fun () -> Typecore.flush_pass tctx2.Typecore.g PFinal "ctx-prephase");
+			protect (fun () -> ServerCache.record_prephase_closure com2 before2)
+		with e ->
+			if dbg then Printf.eprintf "[header-invalidation] ctx pre-phase aborted: %s\n%!" (Printexc.to_string e));
+		com.part_scope.has_error <- saved_has_error;
+		(* The pre-phase's dirty-checks ran on the SHARED cache copies; drop them so the main pass re-decides
+		   against the now-populated delta table (spare dependency-dirty peers whose seed header is unchanged). *)
+		ServerCache.reset_prephase_dirty_peers com;
+		(* Step 2 (shared seed materialization): the deltas live in [header_deltas], but the dirty SEEDS were
+		   only typed in the throwaway com. A spared dependent in the MAIN compile resolves its body reference
+		   to a seed eagerly while the seed is still MSBad in the cache -> Unexpected BadModule. So re-type the
+		   dirty SEEDS only (not their closure) from source into the MAIN context; their dirty peers are spared
+		   (restored from cache) per the deltas, so this stays cheap. PFinal flush forces inline cf_expr. *)
+		List.iter (fun mpath ->
+			(try
+				ignore (tctx.Typecore.g.Typecore.do_load_module tctx mpath null_pos);
+				Typecore.flush_pass tctx.Typecore.g PBuildClass "ctx-prephase-seed"
+			with Error.Error _ | Error.Fatal_error _ -> ())
+		) paths;
+		(try Typecore.flush_pass tctx.Typecore.g PFinal "ctx-prephase-seed"
+		 with Error.Error _ | Error.Fatal_error _ -> ());
+		if dbg then Printf.eprintf "[header-invalidation] frontier(ctx) closure typed: %d | wall=%.0fms\n%!"
+			ServerCache.spare_stats.sp_retyped ((Extc.time () -. t0) *. 1000.)
+
 let retype_dirty_frontier com tctx =
 	let dbg = Define.raw_defined com.defines "hxb.header_stats" in
 	match ServerCache.collect_dirty_frontier com with
@@ -495,7 +557,10 @@ let do_type com mctx actx display_file_dot_path =
 	   (display-file load below, check_display_file, main typing). Those walks make the cache-reuse
 	   decision via ServerCache.dependency_change_observable, which needs the header deltas already
 	   populated; running this later left every lookup hitting an empty table. *)
-	retype_dirty_frontier com tctx;
+	if Define.defined com.defines Define.HxbPrephaseContext then
+		retype_dirty_frontier_separate com tctx macros
+	else
+		retype_dirty_frontier com tctx;
 	let display_file_dot_path = DisplayProcessing.maybe_load_display_file_before_typing tctx display_file_dot_path in
 	(* Make sure display module is being typed *)
 	Option.may (fun cpath -> actx.classes <- cpath :: actx.classes) display_file_dot_path;

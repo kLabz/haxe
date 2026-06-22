@@ -334,7 +334,7 @@ let record_prephase_closure com before =
    HEADER did not change is spared (restored from its still-valid cache) instead of re-typed. Genuinely
    source-dirty seeds are left dirty so they are re-typed. Gated with the partial-dirty experiment. *)
 let reset_prephase_dirty_peers com =
-	if Define.defined com.defines Define.HxbHeaderInvalidation && Define.defined com.defines Define.HxbPrephasePartialDirty then begin
+	if Define.defined com.defines Define.HxbHeaderInvalidation && (Define.defined com.defines Define.HxbPrephasePartialDirty || Define.defined com.defines Define.HxbPrephaseContext) then begin
 		let cc = CommonCache.get_cache com in
 		(* check_module reads/mutates the per-request COPIES in tmp_binary_cache (cc#get_hxb_module), not
 		   the pristine binary_cache entries, so the pre-phase's conservative dirty-marking lives there.

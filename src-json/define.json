@@ -106,6 +106,12 @@
 		"doc": "Phase 2 increment 3 (WIP): run the header pre-phase in a throwaway module_lut swapped onto com, so its re-typed seeds and restored peers never reach the main compile's module_lut / codegen; only header_deltas are handed back."
 	},
 	{
+		"name": "HxbPrephaseContext",
+		"define": "hxb.prephase-context",
+		"signatureNeutral": true,
+		"doc": "Phase 2 (separate-context refactor): run the header pre-phase in its OWN cloned compilation context (own module_lut / typer globals / basic), sharing only the module cache for reading, handing back only header deltas. No typed object from the pre-phase reaches the main compile, eliminating the isolate leak."
+	},
+	{
 		"name": "HxbPrephasePartialDirty",
 		"define": "hxb.prephase-partial-dirty",
 		"signatureNeutral": true,

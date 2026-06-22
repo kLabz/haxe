@@ -308,7 +308,7 @@ and context = {
 	mutable config : PlatformConfig.platform_config;
 	mutable custom_ext : string option;
 	empty_class_path : ClassPath.class_path;
-	class_paths : ClassPaths.class_paths;
+	mutable class_paths : ClassPaths.class_paths;
 	main : Gctx.context_main;
 	mutable package_rules : (string,package_rule) PMap.t;
 	(* communication *)

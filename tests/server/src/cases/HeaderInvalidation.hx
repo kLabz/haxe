@@ -184,6 +184,33 @@ class HeaderInvalidation extends TestCase {
 		assertSuccess();
 	}
 
+	// Separate-context pre-phase (-D hxb.prephase-context): the pre-phase runs in its OWN cloned com, so
+	// nothing it types reaches the main compile. Sparing must still work via the handed-back header deltas:
+	// a body edit of CycA spares CycB (cyclic peer) and CycC (external dependent); a signature edit
+	// invalidates CycC. Build stays clean (no leak by construction).
+	function testCyclicSeparateContext() {
+		vfs.putContent("CycA.hx", getTemplate("HeaderInvalidation/CycA.hx"));
+		vfs.putContent("CycB.hx", getTemplate("HeaderInvalidation/CycB.hx"));
+		vfs.putContent("CycC.hx", getTemplate("HeaderInvalidation/CycC.hx"));
+		vfs.putContent("CycMain.hx", getTemplate("HeaderInvalidation/CycMain.hx"));
+		var args = ["-main", "CycMain", "--no-output", "-js", "no.js", "-D", "hxb.header-invalidation",
+			"-D", "hxb.prephase-context"];
+		runHaxe(args);
+		assertSuccess();
+
+		vfs.putContent("CycA.hx", getTemplate("HeaderInvalidation/CycA.hx").replace("return 1", "return 2"));
+		runHaxeJson([], ServerMethods.Invalidate, {file: new FsPath("CycA.hx")});
+		runHaxe(args);
+		assertSuccess();
+		assertReuse("CycC");
+
+		vfs.putContent("CycA.hx", getTemplate("HeaderInvalidation/CycA.hx").replace("ping():Int", "ping(extra:Int = 0):Int"));
+		runHaxeJson([], ServerMethods.Invalidate, {file: new FsPath("CycA.hx")});
+		runHaxe(args);
+		assertSuccess();
+		Assert.isFalse(hasMessage("reusing CycC"));
+	}
+
 	// Repro attempt for the GENERIC type-parameter leak ("haxe.ds.Map.V should be X"): GMap is a generic
 	// abstract pulled into the pre-phase (partial) via the GSeed<->GUser cycle. Editing GSeed's signature
 	// re-types GUser, which calls GMap<String,Int>.get -> if a leaked partial GMap reaches the main compile,
