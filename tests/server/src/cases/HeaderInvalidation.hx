@@ -105,4 +105,36 @@ class HeaderInvalidation extends TestCase {
 		runHaxe(args);
 		assertSuccess();
 	}
+
+	// Increment 2 (-D hxb.prephase-partial-dirty): editing a seed inside a dependency cycle. CycA<->CycB
+	// are mutually recursive (an SCC); CycC depends on CycA from OUTSIDE the cycle. Editing CycA's body
+	// makes CycB dirty *only by dependency* (its own source is unchanged). With partial-dirty the
+	// pre-phase restores CycB signature-only to compute CycA's header instead of re-typing the whole SCC.
+	// This must stay sound: a body edit spares CycC, a signature edit invalidates it, both build cleanly
+	// (guards against the partial-restore-of-a-cyclic-peer crash / stale-header classes).
+	function testCyclicPeerPartialDirty() {
+		vfs.putContent("CycA.hx", getTemplate("HeaderInvalidation/CycA.hx"));
+		vfs.putContent("CycB.hx", getTemplate("HeaderInvalidation/CycB.hx"));
+		vfs.putContent("CycC.hx", getTemplate("HeaderInvalidation/CycC.hx"));
+		vfs.putContent("CycMain.hx", getTemplate("HeaderInvalidation/CycMain.hx"));
+		var args = ["-main", "CycMain", "--no-output", "-js", "no.js", "-D", "hxb.header-invalidation",
+			"-D", "hxb.prephase-isolate", "-D", "hxb.prephase-partial", "-D", "hxb.prephase-partial-dirty"];
+		runHaxe(args);
+		assertSuccess();
+
+		// Body-only edit of CycA (signature unchanged): CycC's used signature is unchanged -> spared.
+		vfs.putContent("CycA.hx", getTemplate("HeaderInvalidation/CycA.hx").replace("return 1", "return 2"));
+		runHaxeJson([], ServerMethods.Invalidate, {file: new FsPath("CycA.hx")});
+		runHaxe(args);
+		assertSuccess();
+		assertReuse("CycC");
+
+		// Signature edit of CycA.ping (extra defaulted arg keeps CycC's call valid): CycC depends on
+		// ping's signature -> it must be re-typed, not reused.
+		vfs.putContent("CycA.hx", getTemplate("HeaderInvalidation/CycA.hx").replace("ping():Int", "ping(extra:Int = 0):Int"));
+		runHaxeJson([], ServerMethods.Invalidate, {file: new FsPath("CycA.hx")});
+		runHaxe(args);
+		assertSuccess();
+		Assert.isFalse(hasMessage("reusing CycC"));
+	}
 }

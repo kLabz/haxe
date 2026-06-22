@@ -435,7 +435,13 @@ let retype_dirty_frontier com tctx =
 			let part = !(com.hxb_reader_stats.modules_partially_restored) - part0 in
 			(* [part] counts every restore; full restores are a subset, so partial-only = part - full. *)
 			Printf.eprintf "[header-invalidation] frontier closure typed: %d MCode modules | hxb restores: full=%d partial-only=%d | pre-phase wall=%.0fms\n%!"
-				ServerCache.spare_stats.sp_retyped full (part - full) ((Extc.time () -. t0) *. 1000.)
+				ServerCache.spare_stats.sp_retyped full (part - full) ((Extc.time () -. t0) *. 1000.);
+			(* Same key counts on the captured server-message channel (print_endline -> stdout) so a
+			   server test can assert the pre-phase work: [typed] = MCode modules fully re-typed in the
+			   pre-phase (the perf cost we drive toward the seed count), [partial] = peers restored
+			   signature-only instead. eprintf above is for interactive runs; this line is for tests. *)
+			print_endline (Printf.sprintf "[header-prephase] typed=%d partial=%d"
+				ServerCache.spare_stats.sp_retyped (Hashtbl.length ServerCache.prephase_partial_paths))
 		end
 
 (** Creates the typer context and types [classes] into it. *)

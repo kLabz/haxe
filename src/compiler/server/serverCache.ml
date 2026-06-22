@@ -132,8 +132,18 @@ let get_typing_mode com m_extra =
 	   must NOT go partial -- it is a frontier seed that has to be re-typed in full from its new source;
 	   restoring it signature-only from the previous compile's hxb yields a STALE header, which silently
 	   spares dependents of a module whose signature actually changed. *)
+	(* Increment 2 (-D hxb.prephase-partial-dirty): a peer that is MSBad *only* because a dependency is
+	   dirty (DependencyDirty) was NOT itself source-edited, so its cached signature is still valid and can
+	   be restored partial like a clean peer. This is what lets an edited seed's header be computed without
+	   re-typing its whole cyclic SCC (every SCC peer is DependencyDirty via the edited seed). Genuine
+	   source/seed changes (FileChanged / Shadowed / Tainted / LibraryChanged) must still re-type in full. *)
+	let partial_ok = match m_extra.m_cache_state with
+		| MSGood -> true
+		| MSBad (DependencyDirty _) -> Define.defined com.defines Define.HxbPrephasePartialDirty
+		| MSBad _ | MSUnknown -> false
+	in
 	if !prephase_partial_mode
-		&& (match m_extra.m_cache_state with MSGood -> true | _ -> false)
+		&& partial_ok
 		&& not (DisplayPosition.display_position#is_in_file (Path.UniqueKey.lazy_key m_extra.m_file))
 	then
 		AllowPartialTyping
@@ -248,8 +258,9 @@ let note_retyped_module com m =
    change is observable to the dependent (it must be invalidated), false if it can be spared.
 
    Conservatively returns true whenever the dependency was not re-typed this round (so we have no
-   fresh header to diff) or the dependent records no field-granular edge to it. *)
-let dependency_change_observable com m_extra sign mpath reason =
+   fresh header to diff) or -- for a change we can't localize -- the dependent records no field-granular
+   edge to it. [origin] is how the dependent reaches this dependency (typing/import vs macro). *)
+let dependency_change_observable com m_extra sign mpath origin reason =
 	if not (Define.defined com.defines Define.HxbHeaderInvalidation) then
 		true
 	else match Hashtbl.find_opt header_deltas (sign,mpath) with
@@ -276,7 +287,19 @@ let dependency_change_observable com m_extra sign mpath reason =
 			if edge.dep_tgt_path = mpath && edge.dep_tgt_sign = sign then edge :: acc else acc
 		) m_extra.m_field_deps [] in
 		if edges = [] then begin
-			spare_stats.sp_no_edges <- spare_stats.sp_no_edges + 1; true
+			(* No field-granular edge to localize the change. If the dependency's header is byte-identical
+			   (changes = []; this includes rendered impl-field bodies, so inline/@:generic body edits show
+			   up as changes), nothing it exposes changed, so a dependent reaching it through a pure
+			   typing/import reference cannot observe anything -- spare it. This is what lets a body edit
+			   spare a cyclic peer that mentions the edited module only structurally (e.g. `var x:Other`)
+			   and so has no field-level edge. Macro deps stay conservative: a macro may observe things the
+			   header does not capture. A non-empty header change with no edge stays conservative too. *)
+			let pure_ref = match origin with MDepFromTyping | MDepFromImport -> true | _ -> false in
+			if changes = [] && pure_ref then begin
+				spare_stats.sp_spared <- spare_stats.sp_spared + 1; false
+			end else begin
+				spare_stats.sp_no_edges <- spare_stats.sp_no_edges + 1; true
+			end
 		end else begin
 			let field_is_impl tn key = header_field_is_impl m_new tn key in
 			let observable = ModuleHeader.changes_observable ~field_is_impl changes edges in
@@ -455,7 +478,7 @@ let check_module sctx com m_path m_extra p =
 				| Some reason ->
 					(* The dependency is dirty, but a dirty dependency is only a reason to invalidate
 					   if its *signature* (header) changed in a way this module can observe. *)
-					if dependency_change_observable com m_extra sign mpath reason then
+					if dependency_change_observable com m_extra sign mpath mdep.md_origin reason then
 						raise (Dirty (DependencyDirty(mpath,reason)))
 			) m_extra.m_deps
 		in
