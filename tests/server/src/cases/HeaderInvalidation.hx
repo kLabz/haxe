@@ -66,4 +66,24 @@ class HeaderInvalidation extends TestCase {
 		assertSuccess();
 		Assert.isFalse(hasMessage("reusing MainGeneric"));
 	}
+
+	// Partial-peer leak repro: re-typing an edited seed in the isolated pre-phase partial-restores a
+	// CLEAN inline peer (cf_expr deferred -> None). That partial object must NOT leak into the main
+	// compile, where a re-typed dependent inlines the same peer. If it leaks, inlining a cf_expr=None
+	// field fails ("Recursive inline is not supported").
+	function testPartialPeerLeak() {
+		vfs.putContent("PeerInline.hx", getTemplate("HeaderInvalidation/PeerInline.hx"));
+		vfs.putContent("SeedRefPeer.hx", getTemplate("HeaderInvalidation/SeedRefPeer.hx"));
+		vfs.putContent("MainLeak.hx", getTemplate("HeaderInvalidation/MainLeak.hx"));
+		var args = ["-main", "MainLeak", "--no-output", "-js", "no.js", "-D", "hxb.header-invalidation", "-D", "hxb.prephase-isolate", "-D", "hxb.prephase-partial"];
+		runHaxe(args);
+		assertSuccess();
+
+		// Signature change on the seed: MainLeak (depends on SeedRefPeer's signature) must be re-typed,
+		// and it inlines PeerInline -> exercises the leaked partial peer if any.
+		vfs.putContent("SeedRefPeer.hx", getTemplate("HeaderInvalidation/SeedRefPeer.hx").replace("get():Int", "get():Float"));
+		runHaxeJson([], ServerMethods.Invalidate, {file: new FsPath("SeedRefPeer.hx")});
+		runHaxe(args);
+		assertSuccess();
+	}
 }
