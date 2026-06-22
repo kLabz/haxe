@@ -90,7 +90,10 @@ let rec cache_context cs com =
 		(* Snapshot the module's structured signature post-typing so the *old* header is available
 		   (without decoding bodies) on the next compilation — both for the in-memory cache (kept
 		   live object) and for the hxb cache (copied into mc_extra by add_binary_cache). *)
-		m.m_extra.m_header <- Some (ModuleHeader.module_header_of m);
+		(* Reuse the post-typing/pre-filter header snapshotted in compiler.ml when header-invalidation is on
+		   (stage-consistent with the pre-phase); otherwise compute it here (post-filter, fine -- unused for
+		   invalidation, only written to the hxb MHD chunk). *)
+		if m.m_extra.m_header = None then m.m_extra.m_header <- Some (ModuleHeader.module_header_of m);
 		if Define.defined com.defines DisableHxbCache then
 			(* If we have a signature mismatch, look-up cache for module. Physical equality check is fine as a heuristic. *)
 			let cc = if m.m_extra.m_sign = sign then cc else cs#get_context m.m_extra.m_sign in

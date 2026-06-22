@@ -653,6 +653,13 @@ let compile com actx sctx =
 		(* Actual compilation starts here *)
 		let (tctx,display_file_dot_path) = Timer.time com.timer_ctx ["typing"] (do_type com mctx actx) display_file_dot_path in
 		if DisplayProcessing.handle_display_after_typing com tctx display_file_dot_path then raise CompilerMessage.Abort;
+		(* Snapshot each module's header NOW -- post-typing, BEFORE filters/analyzer -- so the cached
+		   baseline is computed at the SAME stage the header pre-phase computes its fresh headers. The
+		   analyzer rewrites inline-impl-field bodies and adds inferred meta (@:pure(inferredPure)); a
+		   post-filter baseline would therefore differ from the pre-phase's pre-filter header for every
+		   re-typed module, producing false header changes on no-op edits. cache_module reuses this. *)
+		if Define.defined com.defines Define.HxbHeaderInvalidation then
+			com.module_lut#iter (fun _ m -> m.m_extra.m_header <- Some (ModuleHeader.module_header_of m));
 		let ectx = ExceptionInit.create_exception_context tctx in
 		finalize_typing com tctx;
 		Dump.maybe_generate_dump com AfterTyping;
