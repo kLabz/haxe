@@ -152,7 +152,7 @@ let unify_call_args ctx el args r callp ?(call_field_p=callp) inline force_inlin
 			end
 		| e :: el,(name,opt,t) :: args ->
 			let body_capture = reset_call_arg_body_capture ctx in
-			let restore_monos = monomorph_transaction ctx in
+			let restore_monos = if opt then monomorph_transaction ctx else (fun () -> ()) in
 			let committed = ref false in
 			let commit () = if not !committed then begin committed := true; commit_captured_messages ctx.com !body_capture end in
 			let drop () = committed := true in
