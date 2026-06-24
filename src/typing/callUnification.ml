@@ -168,17 +168,34 @@ let unify_call_args ctx el args r callp ?(call_field_p=callp) inline force_inlin
 			let committed = ref false in
 			let commit () = if not !committed then begin committed := true; commit_captured_messages ctx.com !body_capture end in
 			let drop () = committed := true in
+			let might_skip = opt && List.length el < List.length args in
+			let opt_followed_by_rest = opt && match args with
+				| [(_,_,t)] -> ExtType.is_rest (follow t)
+				| _ -> false
+			in
+			(* A captured error means a function-literal body did not fit this parameter
+			   (type_local_function recovers the literal in place, so type_against still
+			   succeeds). Treat it like a unification failure for argument matching. *)
+			let body_had_error () =
+				List.exists (fun cm -> Message.cm_severity cm = Message.MessageSeverity.Error) !body_capture
+			in
+			let body_error () = match !body_capture with
+				| cm :: _ -> make_error (Custom cm.Message.cm_message) cm.Message.cm_pos
+				| [] -> die "" __LOC__
+			in
 			begin try
 				begin try
-					let e = type_against name t e in
-					commit ();
-					e :: loop el args
+					let e_typed = type_against name t e in
+					if (might_skip || opt_followed_by_rest) && body_had_error () then begin
+						drop ();
+						restore_monos();
+						let e_def = skip name (body_error ()) t in
+						e_def :: loop (e :: el) args
+					end else begin
+						commit ();
+						e_typed :: loop el args
+					end
 				with WithTypeError ul ->
-					let might_skip = opt && List.length el < List.length args in
-					let opt_followed_by_rest = opt && match args with
-						| [(_,_,t)] -> ExtType.is_rest (follow t)
-						| _ -> false
-					in
 					if might_skip || opt_followed_by_rest then begin
 						drop ();
 						restore_monos();
