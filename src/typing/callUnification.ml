@@ -7,6 +7,15 @@ open Error
 open FieldAccess
 open FieldCallCandidate
 
+let arg_may_capture_body e =
+	let rec loop (e,p) = match e with
+		| EFunction _ -> raise Exit
+		| ECall(e1,_) -> loop e1 (* call arguments get their own capture context *)
+		| ENew _ -> () (* constructor arguments get their own capture context *)
+		| _ -> Ast.iter_expr loop (e,p)
+	in
+	try loop e; false with Exit -> true
+
 let unify_call_args ctx el args r callp ?(call_field_p=callp) inline force_inline in_overload =
 	let call_error err p = raise_error_msg (Call_error err) p in
 
@@ -152,7 +161,10 @@ let unify_call_args ctx el args r callp ?(call_field_p=callp) inline force_inlin
 			end
 		| e :: el,(name,opt,t) :: args ->
 			let body_capture = reset_call_arg_body_capture ctx in
-			let restore_monos = monomorph_transaction ctx in
+			let restore_monos =
+				if opt || arg_may_capture_body e then monomorph_transaction ctx
+				else (fun () -> ())
+			in
 			let committed = ref false in
 			let commit () = if not !committed then begin committed := true; commit_captured_messages ctx.com !body_capture end in
 			let drop () = committed := true in
