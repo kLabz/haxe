@@ -167,41 +167,33 @@ let unify_call_args ctx el args r callp ?(call_field_p=callp) inline force_inlin
 			in
 			let committed = ref false in
 			let commit () = if not !committed then begin committed := true; commit_captured_messages ctx.com !body_capture end in
-			let drop () = committed := true in
-			let might_skip = opt && List.length el < List.length args in
-			let opt_followed_by_rest = opt && match args with
-				| [(_,_,t)] -> ExtType.is_rest (follow t)
-				| _ -> false
+			let can_skip =
+				opt && (List.length el < List.length args || match args with
+					| [(_,_,t)] -> ExtType.is_rest (follow t)
+					| _ -> false)
 			in
-			(* A captured error means a function-literal body did not fit this parameter
-			   (type_local_function recovers the literal in place, so type_against still
-			   succeeds). Treat it like a unification failure for argument matching. *)
-			let body_had_error () =
-				List.exists (fun cm -> Message.cm_severity cm = Message.MessageSeverity.Error) !body_capture
+			let skip_to_next_arg ul =
+				committed := true;
+				restore_monos();
+				let e_def = skip name ul t in
+				e_def :: loop (e :: el) args
 			in
-			let body_error () = match !body_capture with
-				| cm :: _ -> make_error (Custom cm.Message.cm_message) cm.Message.cm_pos
-				| [] -> die "" __LOC__
+			let captured_error () =
+				match List.find_opt (fun cm -> Message.cm_severity cm = Message.MessageSeverity.Error) !body_capture with
+				| Some cm -> Some (make_error (Custom cm.Message.cm_message) cm.Message.cm_pos)
+				| None -> None
 			in
-			begin try
-				begin try
+			Std.finally commit (fun () ->
+				try
 					let e_typed = type_against name t e in
-					if (might_skip || opt_followed_by_rest) && body_had_error () then begin
-						drop ();
-						restore_monos();
-						let e_def = skip name (body_error ()) t in
-						e_def :: loop (e :: el) args
-					end else begin
-						commit ();
-						e_typed :: loop el args
+					begin match (if can_skip then captured_error () else None) with
+					| Some ul -> skip_to_next_arg ul
+					| None -> commit (); e_typed :: loop el args
 					end
 				with WithTypeError ul ->
-					if might_skip || opt_followed_by_rest then begin
-						drop ();
-						restore_monos();
-						let e_def = skip name ul t in
-						e_def :: loop (e :: el) args
-					end else if !body_capture <> [] && (match follow t with TFun _ -> false | _ -> true) then begin
+					if can_skip then
+						skip_to_next_arg ul
+					else if !body_capture <> [] && (match follow t with TFun _ -> false | _ -> true) then begin
 						commit ();
 						restore_monos();
 						let e_def = default_value name t in
@@ -212,11 +204,7 @@ let unify_call_args ctx el args r callp ?(call_field_p=callp) inline force_inlin
 						| [] -> arg_error ul name opt
 						| (s,ul) :: _ -> arg_error ul s true
 					end
-				end
-			with exc ->
-				commit ();
-				raise exc
-			end
+			) ()
 	in
 	let restore = enter_call_args ctx ~in_overload in
 	let el = try loop el args with exc -> restore(); raise exc; in
