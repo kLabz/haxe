@@ -51,3 +51,5 @@ let objsize obj (exclude:Obj.t list) (reach:Obj.t list) =
 let size_with_headers i = (Sys.word_size/8) * (i.data + i.headers)
 
 let size_without_headers i = (Sys.word_size/8) * i.data
+
+let reachable_bytes_of roots = (Sys.word_size/8) * (reach_set roots)

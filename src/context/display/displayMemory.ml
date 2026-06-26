@@ -23,9 +23,6 @@ let get_memory_json ?(macro_detail=false) (cs : CompilationCache.t) mreq =
 			"context",cc#get_json;
 			"size",jint (mem_size cc);
 		]) contexts in
-		let mem_size_2 v exclude =
-			Objsize.size_with_headers (Objsize.objsize v exclude [])
-		in
 		jobject [
 			"contexts",jarray j_contexts;
 			"memory",jobject [
@@ -37,51 +34,38 @@ let get_memory_json ?(macro_detail=false) (cs : CompilationCache.t) mreq =
 				"additionalSizes",jarray (
 					(match !MacroContext.macro_interp_cache with
 					| Some interp when macro_detail ->
-						let eval = Thread_local_storage.get_exn interp.eval in
-						jobject ["name",jstring "macro interpreter";"size",jint (mem_size MacroContext.macro_interp_cache);"child",jarray [
-							jobject ["name",jstring "builtins";"size",jint (mem_size_2 interp.builtins [Obj.repr interp])];
-							jobject ["name",jstring "debug";"size",jint (mem_size_2 interp.debug [Obj.repr interp])];
-							jobject ["name",jstring "curapi";"size",jint (mem_size_2 interp.curapi [Obj.repr interp])];
-							jobject ["name",jstring "type_cache";"size",jint (mem_size_2 interp.type_cache [Obj.repr interp])];
-							jobject ["name",jstring "overrides";"size",jint (mem_size_2 interp.overrides [Obj.repr interp])];
-							jobject ["name",jstring "array_prototype";"size",jint (mem_size_2 interp.array_prototype [Obj.repr interp])];
-							jobject ["name",jstring "string_prototype";"size",jint (mem_size_2 interp.string_prototype [Obj.repr interp])];
-							jobject ["name",jstring "vector_prototype";"size",jint (mem_size_2 interp.vector_prototype [Obj.repr interp])];
-							jobject ["name",jstring "instance_prototypes";"size",jint (mem_size_2 interp.instance_prototypes [Obj.repr interp])];
-							jobject ["name",jstring "static_prototypes";"size",jint (mem_size_2 interp.static_prototypes [Obj.repr interp])];
-							jobject ["name",jstring "constructors";"size",jint (mem_size_2 interp.constructors [Obj.repr interp])];
-							jobject ["name",jstring "file_keys";"size",jint (mem_size_2 interp.file_keys [Obj.repr interp])];
-							jobject ["name",jstring "toplevel";"size",jint (mem_size_2 interp.toplevel [Obj.repr interp])];
-							jobject ["name",jstring "eval";"size",jint (mem_size_2 interp.eval [Obj.repr interp]);"child", jarray [
-								(match eval.env with
-								| Some env ->
-									jobject ["name",jstring "env";"size",jint (mem_size_2 eval.env [Obj.repr interp; Obj.repr eval]);"child", jarray [
-										jobject ["name",jstring "env_info";"size",jint (mem_size_2 env.env_info [Obj.repr interp; Obj.repr eval; Obj.repr env])];
-										jobject ["name",jstring "env_debug";"size",jint (mem_size_2 env.env_debug [Obj.repr interp; Obj.repr eval; Obj.repr env])];
-										jobject ["name",jstring "env_locals";"size",jint (mem_size_2 env.env_locals [Obj.repr interp; Obj.repr eval; Obj.repr env])];
-										jobject ["name",jstring "env_captures";"size",jint (mem_size_2 env.env_captures [Obj.repr interp; Obj.repr eval; Obj.repr env])];
-										jobject ["name",jstring "env_extra_locals";"size",jint (mem_size_2 env.env_extra_locals [Obj.repr interp; Obj.repr eval; Obj.repr env])];
-										jobject ["name",jstring "env_parent";"size",jint (mem_size_2 env.env_parent [Obj.repr interp; Obj.repr eval; Obj.repr env])];
-										jobject ["name",jstring "env_eval";"size",jint (mem_size_2 env.env_eval [Obj.repr interp; Obj.repr eval; Obj.repr env])];
-									]];
-								| None ->
-									jobject ["name",jstring "env";"size",jint (mem_size_2 eval.env [Obj.repr interp; Obj.repr eval])];
-								);
-								jobject ["name",jstring "thread";"size",jint (mem_size_2 eval.thread [Obj.repr interp; Obj.repr eval]);"child", jarray [
-									jobject ["name",jstring "tthread";"size",jint (mem_size_2 eval.thread.thread_mode [Obj.repr interp; Obj.repr eval; Obj.repr eval.thread])];
-									jobject ["name",jstring "tdeque";"size",jint (mem_size_2 eval.thread.thread_deque [Obj.repr interp; Obj.repr eval; Obj.repr eval.thread])];
-									jobject ["name",jstring "tstorage";"size",jint (mem_size_2 eval.eval_storage [Obj.repr interp; Obj.repr eval; Obj.repr eval.thread])];
-								]];
-								jobject ["name",jstring "debug_state";"size",jint (mem_size_2 eval.debug_state [Obj.repr interp; Obj.repr eval])];
-								jobject ["name",jstring "breakpoint";"size",jint (mem_size_2 eval.breakpoint [Obj.repr interp; Obj.repr eval])];
-								jobject ["name",jstring "caught_types";"size",jint (mem_size_2 eval.caught_types [Obj.repr interp; Obj.repr eval])];
-								jobject ["name",jstring "caught_exception";"size",jint (mem_size_2 eval.caught_exception [Obj.repr interp; Obj.repr eval])];
-								jobject ["name",jstring "last_return";"size",jint (mem_size_2 eval.last_return [Obj.repr interp; Obj.repr eval])];
-								jobject ["name",jstring "debug_channel";"size",jint (mem_size_2 eval.debug_channel [Obj.repr interp; Obj.repr eval])];
-							]];
-							jobject ["name",jstring "evals";"size",jint (mem_size_2 interp.evals [Obj.repr interp])];
-							jobject ["name",jstring "exception_stack";"size",jint (mem_size_2 eval.exception_stack [Obj.repr interp])];
-						]];
+						(* Correct partition of the interpreter: each field's size is the
+						   unique words it adds over the fields counted before it (prefix-
+						   sum of reachable-set unions), so shared blocks are counted once
+						   and the children sum to the interpreter content. Each step is one
+						   reachable_words walk; the field set is kept flat to bound the cost
+						   (the deep env/thread sub-objects were ~0). [macro_detail] gated. *)
+						let fields = [
+							"builtins",Obj.repr interp.builtins;
+							"debug",Obj.repr interp.debug;
+							"curapi",Obj.repr interp.curapi;
+							"type_cache",Obj.repr interp.type_cache;
+							"overrides",Obj.repr interp.overrides;
+							"array_prototype",Obj.repr interp.array_prototype;
+							"string_prototype",Obj.repr interp.string_prototype;
+							"vector_prototype",Obj.repr interp.vector_prototype;
+							"instance_prototypes",Obj.repr interp.instance_prototypes;
+							"static_prototypes",Obj.repr interp.static_prototypes;
+							"constructors",Obj.repr interp.constructors;
+							"file_keys",Obj.repr interp.file_keys;
+							"toplevel",Obj.repr interp.toplevel;
+							"eval",Obj.repr interp.eval;
+							"evals",Obj.repr interp.evals;
+						] in
+						let prefix = ref [] and prev = ref 0 in
+						let children = List.map (fun (name,v) ->
+							prefix := v :: !prefix;
+							let cur = Objsize.reachable_bytes_of !prefix in
+							let sz = cur - !prev in
+							prev := cur;
+							jobject ["name",jstring name;"size",jint sz]
+						) fields in
+						jobject ["name",jstring "macro interpreter";"size",jint (mem_size MacroContext.macro_interp_cache);"child",jarray children]
 					| _ ->
 						(* No interp, or macro_detail off: report the total only (cheap). *)
 						jobject ["name",jstring "macro interpreter";"size",jint (mem_size MacroContext.macro_interp_cache)];
