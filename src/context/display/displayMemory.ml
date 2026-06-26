@@ -33,7 +33,16 @@ let get_memory_json ?(macro_detail=false) (cs : CompilationCache.t) mreq =
 				"nativeLibCache",jint (mem_size cache_mem.(3));
 				"additionalSizes",jarray (
 					(match !MacroContext.macro_interp_cache with
-					| Some interp when macro_detail ->
+					| Some interp ->
+						(* Entry counts (cheap, always). orphan_protos = instance_prototypes
+						   whose path is no longer in type_cache (type unregistered) = stale signal. *)
+						let orphans = IntMap.fold (fun k _ n -> if IntMap.mem k interp.type_cache then n else n + 1) interp.instance_prototypes 0 in
+						let count_children = [
+							jobject ["name",jstring "count:instance_prototypes";"size",jint (IntMap.cardinal interp.instance_prototypes)];
+							jobject ["name",jstring "count:type_cache";"size",jint (IntMap.cardinal interp.type_cache)];
+							jobject ["name",jstring "count:constructors";"size",jint (IntMap.cardinal interp.constructors)];
+							jobject ["name",jstring "count:orphan_protos";"size",jint orphans];
+						] in
 						(* Correct partition of the interpreter: each field's size is the
 						   unique words it adds over the fields counted before it (prefix-
 						   sum of reachable-set unions), so shared blocks are counted once
@@ -58,16 +67,15 @@ let get_memory_json ?(macro_detail=false) (cs : CompilationCache.t) mreq =
 							"evals",Obj.repr interp.evals;
 						] in
 						let prefix = ref [] and prev = ref 0 in
-						let children = List.map (fun (name,v) ->
+						let children = if not macro_detail then [] else List.map (fun (name,v) ->
 							prefix := v :: !prefix;
 							let cur = Objsize.reachable_bytes_of !prefix in
 							let sz = cur - !prev in
 							prev := cur;
 							jobject ["name",jstring name;"size",jint sz]
 						) fields in
-						jobject ["name",jstring "macro interpreter";"size",jint (mem_size MacroContext.macro_interp_cache);"child",jarray children]
-					| _ ->
-						(* No interp, or macro_detail off: report the total only (cheap). *)
+						jobject ["name",jstring "macro interpreter";"size",jint (mem_size MacroContext.macro_interp_cache);"child",jarray (count_children @ children)]
+					| None ->
 						jobject ["name",jstring "macro interpreter";"size",jint (mem_size MacroContext.macro_interp_cache)];
 					)
 					::
