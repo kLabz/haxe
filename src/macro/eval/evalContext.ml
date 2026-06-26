@@ -22,6 +22,18 @@ open EvalValue
 open EvalHash
 open EvalString
 
+(* Per-thread storage backing haxe's `sys.thread.Tls`. Keyed WEAKLY by the Tls
+   instance (an [ITls] VInstance) so a Tls value lives exactly as long as something
+   still references its Tls instance. In the compilation server the eval thread is
+   reused across compiles, so a non-weak map would retain every Tls value forever
+   (incl. those of long-dead instances). Macros that intentionally keep a Tls across
+   compiles keep the instance reachable, so their value survives; dead ones are freed. *)
+module TlsStorage = Ephemeron.K1.Make(struct
+	type t = value
+	let equal = (==)
+	let hash v = match v with VInstance {ikind = ITls i} -> i | _ -> 0
+end)
+
 type var_info = {
 	vi_name : string;
 	vi_pos : pos;
@@ -122,7 +134,7 @@ and eval = {
 	mutable last_return : value option;
 	(* The debug channel used to synchronize with the debugger. *)
 	debug_channel : unit Event.channel;
-	mutable eval_storage : value IntMap.t;
+	eval_storage : value TlsStorage.t;
 }
 
 and debug_state =
