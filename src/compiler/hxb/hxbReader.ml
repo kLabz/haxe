@@ -1754,8 +1754,13 @@ class hxb_reader
 			self#read_list (fun () ->
 				let cf = self#read_field_ref in
 				let length = read_uleb128 ch in
-				let bytes = read_bytes ch length in
-				let ch_cf = BytesWithPosition.create bytes in
+				(* Share the underlying (cached) chunk bytes at the current offset instead
+				   of copying this field's expression blob. The bytes already live in
+				   binary_cache, and for deferred (lazy) expressions the copy was duplicated
+				   AND retained until the lazy was forced. Give the sub-reader its own
+				   position over the same bytes, then skip the main reader past the blob. *)
+				let ch_cf = { ch with pos = ch.pos } in
+				ch.pos <- ch.pos + length;
 				let read_expressions () =
 					self#select_class_type_parameters c;
 					field_type_parameters <- (ClassFieldInfos.get class_field_infos cf).type_parameters;
