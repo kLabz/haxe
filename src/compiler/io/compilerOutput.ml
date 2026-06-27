@@ -35,6 +35,7 @@ let extract_error_message je =
 let send_timer_report io timer_ctx =
 	let buf = Buffer.create 4096 in
 	Timer.report_times timer_ctx (fun s -> Buffer.add_string buf (s ^ "\n"));
+	MemProfiler.report_and_reset (fun s -> Buffer.add_string buf (s ^ "\n"));
 	try (CompilerIo.write_err io) (Buffer.contents buf) with _ -> ()
 
 (** Create the handler for server-pipe mode (non-JSON-RPC server).
