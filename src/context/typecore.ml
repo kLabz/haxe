@@ -87,7 +87,13 @@ type macro_result =
 	| MMacroInMacro
 
 type typer_pass_tasks = {
+	(* Front of the queue; head = next task to run. [delay] pushes here. *)
 	mutable tasks : (unit -> unit) list;
+	(* Back of the queue, stored reversed (head = most recently appended).
+	   [delay_late] pushes here in O(1); flushed (reversed) onto [tasks] when
+	   [tasks] empties. This makes the front/back a banker's queue, replacing the
+	   former O(n) `tasks @ [f]` append (a top promoted-allocation site). *)
+	mutable tasks_late : (unit -> unit) list;
 }
 
 type function_mode =
@@ -513,7 +519,7 @@ let delay g (p : typer_pass) f =
 let delay_late g (p : typer_pass) f =
 	let p = Obj.magic p in
 	let tasks = g.delayed.(p) in
-	tasks.tasks <- tasks.tasks @ [f];
+	tasks.tasks_late <- f :: tasks.tasks_late;
 	if p < g.delayed_min_index then
 		g.delayed_min_index <- p
 
@@ -529,16 +535,26 @@ let rec flush_pass g (p : typer_pass) where =
 			()
 		else begin
 			let tasks = g.delayed.(i) in
-			match tasks.tasks with
+			begin match tasks.tasks with
 			| f :: l ->
 				tasks.tasks <- l;
 				f();
 				flush_pass g p where
 			| [] ->
-				(* Done with this pass (for now), update min index to next one *)
-				let i = i + 1 in
-				g.delayed_min_index <- i;
-				loop i
+				begin match tasks.tasks_late with
+				| _ :: _ ->
+					(* Front empty: move the late tasks (reversed back to insertion
+					   order) onto the front and keep going within this pass. *)
+					tasks.tasks <- List.rev tasks.tasks_late;
+					tasks.tasks_late <- [];
+					flush_pass g p where
+				| [] ->
+					(* Done with this pass (for now), update min index to next one *)
+					let i = i + 1 in
+					g.delayed_min_index <- i;
+					loop i
+				end
+			end
 		end
 	in
 	loop g.delayed_min_index
