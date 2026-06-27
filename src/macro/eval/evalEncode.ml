@@ -256,19 +256,28 @@ let encode_string_map convert m =
 	PMap.iter (fun key value -> RuntimeStringHashtbl.add h (create_ascii key) (convert value)) m;
 	encode_string_map_direct h
 
+(* fake_proto builds an empty, immutable prototype used only as the [iproto] of
+   opaque wrapper instances (positions, lazy types, refs, ...). It depends solely on
+   [path] and is never mutated after creation, so cache one per path: encode_pos alone
+   builds one per encoded position and was a top promoted-allocation site. *)
+let fake_proto_cache : (int,vprototype) Hashtbl.t = Hashtbl.create 0
+
 let fake_proto path =
-	let proto = {
-		ppath = path;
-		pfields = [||];
-		pnames = IntMap.empty;
-		pinstance_names = IntMap.empty;
-		pinstance_fields = [||];
-		pparent = None;
-		pkind = PInstance;
-		pvalue = vnull;
-	} in
-	proto.pvalue <- vprototype proto;
-	proto
+	try Hashtbl.find fake_proto_cache path
+	with Not_found ->
+		let proto = {
+			ppath = path;
+			pfields = [||];
+			pnames = IntMap.empty;
+			pinstance_names = IntMap.empty;
+			pinstance_fields = [||];
+			pparent = None;
+			pkind = PInstance;
+			pvalue = vnull;
+		} in
+		proto.pvalue <- vprototype proto;
+		Hashtbl.replace fake_proto_cache path proto;
+		proto
 
 let encode_unsafe o =
 	vinstance {
