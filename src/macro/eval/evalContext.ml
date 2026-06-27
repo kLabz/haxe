@@ -397,6 +397,44 @@ let call_stack eval =
 	| None -> []
 	| Some env -> loop [] env
 
+(* Diagnostic (Task #6): attribute Tls eval_storage retention to the macro
+   call-site that first stored a value in each Tls instance. Gated by
+   HAXE_TLS_DEBUG so normal runs pay nothing. Read by DisplayMemory. *)
+let tls_debug = Stdlib.Lazy.from_fun (fun () -> try Sys.getenv "HAXE_TLS_DEBUG" = "1" with Not_found -> false)
+(* id -> set-site string *)
+let tls_sites : (int, string) Hashtbl.t = Hashtbl.create 0
+(* weak refs to the Tls instances themselves, so DisplayMemory can enumerate the
+   live ones without pinning them (the eval_storage table is a non-iterable
+   Ephemeron). Only populated when HAXE_TLS_DEBUG=1. *)
+let tls_key_refs : value Weak.t list ref = ref []
+
+let record_tls_site eval vthis =
+	if Stdlib.Lazy.force tls_debug then begin
+		let id = match vthis with VInstance {ikind=ITls i} -> i | _ -> -1 in
+		if not (Hashtbl.mem tls_sites id) then begin
+			let frame_name env = match env.env_info.kind with
+				| EKMethod(i1,i2) -> Printf.sprintf "%s.%s" (rev_hash i1) (rev_hash i2)
+				| EKMacro(i1,i2) -> Printf.sprintf "Macro %s.%s" (rev_hash i1) (rev_hash i2)
+				| EKLocalFunction i -> Printf.sprintf "localFunction%i" i
+				| EKEntrypoint -> "entrypoint"
+			in
+			let buf = Buffer.create 128 in
+			let rec loop n = function
+				| env :: rest when n > 0 ->
+					Buffer.add_string buf (Printf.sprintf "%s (%s:%i) <- "
+						(frame_name env) (rev_hash env.env_info.pfile) env.env_leave_pmin);
+					loop (n - 1) rest
+				| _ -> ()
+			in
+			(* innermost frame first *)
+			loop 6 (List.rev (call_stack eval));
+			Hashtbl.replace tls_sites id (Buffer.contents buf);
+			let w = Weak.create 1 in
+			Weak.set w 0 (Some vthis);
+			tls_key_refs := w :: !tls_key_refs
+		end
+	end
+
 let throw v p =
 	let ctx = get_ctx() in
 	let eval = get_eval ctx in

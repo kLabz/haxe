@@ -4,6 +4,49 @@ open Memory
 open Genjson
 open Type
 
+(* EventLoop accumulation probe (Task #6): walk haxe.EventLoop.main's events/queue
+   linked lists. Node COUNT is cheap and decisive — growth across recompiles means
+   macro-scheduled events (Timer/promises/coroutines) are never drained and their
+   callb closures pin stale per-compile ctx graphs. [deep] also sizes the chains'
+   reachable graph (one ~whole-interp walk each, macro_detail only). *)
+let eventloop_report ?(deep=false) interp =
+	let open EvalValue in
+	let open EvalContext in
+	let field v nameh = match v with
+		| VInstance i -> (try Some i.ifields.(IntMap.find nameh i.iproto.pinstance_names) with Not_found -> None)
+		| VObject o -> (match o.oproto with OProto p -> (try Some o.ofields.(IntMap.find nameh p.pinstance_names) with Not_found -> None) | _ -> None)
+		| _ -> None
+	in
+	let next_h = EvalHash.hash "next" in
+	let count_chain root =
+		let rec loop n v = match v with
+			| Some (VInstance _ as e) when n < 100_000_000 -> loop (n + 1) (field e next_h)
+			| _ -> n
+		in
+		loop 0 root
+	in
+	try
+		let proto = get_static_prototype_raise interp (EvalHash.hash "haxe.EventLoop") in
+		match (try Some proto.pfields.(IntMap.find (EvalHash.hash "main") proto.pnames) with Not_found -> None) with
+		| Some (VInstance _ as m) ->
+			let events = field m (EvalHash.hash "events") in
+			let queue = field m (EvalHash.hash "queue") in
+			let deep_children = if not deep then [] else
+				let mk name = function
+					| Some v -> jobject ["name",jstring name;"size",jint (Objsize.reachable_bytes_of [Obj.repr v])]
+					| None -> jobject ["name",jstring name;"size",jint 0]
+				in
+				[mk "events.reach" events; mk "queue.reach" queue]
+			in
+			[jobject ["name",jstring "EventLoop.main";"size",jint 0;"child",jarray (
+				jobject ["name",jstring "count:events";"size",jint (count_chain events)] ::
+				jobject ["name",jstring "count:queue";"size",jint (count_chain queue)] ::
+				deep_children
+			)]]
+		| _ -> [jobject ["name",jstring "EventLoop.main: absent/not-instance";"size",jint 0]]
+	with Not_found ->
+		[jobject ["name",jstring "EventLoop.main: proto not found";"size",jint 0]]
+
 (* [macro_detail] gates the per-field macro-interpreter breakdown: it costs ~one
    full-heap Obj.reachable_words traversal PER child (the children reach the shared
    type graph), so it dominates the request (~180s on mog). Off by default; the
@@ -74,7 +117,50 @@ let get_memory_json ?(macro_detail=false) (cs : CompilationCache.t) mreq =
 							prev := cur;
 							jobject ["name",jstring name;"size",jint sz]
 						) fields in
-						jobject ["name",jstring "macro interpreter";"size",jint (mem_size MacroContext.macro_interp_cache);"child",jarray (count_children @ children)]
+						(* Tls eval_storage attribution (Task #6): group the live Tls
+						   values across all eval threads by the macro call-site that set
+						   them (EvalContext.tls_sites, populated when HAXE_TLS_DEBUG=1) and
+						   partition their sizes (prefix-sum, shared blocks counted once).
+						   Reveals which macros/modules hold the retained eval_storage. *)
+						let tls_children = if not macro_detail then [] else begin
+							let open EvalValue in
+							let open EvalContext in
+							(* eval_storage is a non-iterable Ephemeron; enumerate the live Tls
+							   instances via the weak key refs, then find each one's value in
+							   whichever eval thread holds it. *)
+							let entries = List.filter_map (fun w ->
+								match Weak.get w 0 with
+								| None -> None
+								| Some inst ->
+									let found = ThreadSafeHashtbl.fold (fun _ eval acc ->
+										match acc with
+										| Some _ -> acc
+										| None -> (try Some (TlsStorage.find eval.eval_storage inst) with Not_found -> None)
+									) interp.evals None in
+									(match found with Some v -> Some (inst,v) | None -> None)
+							) !tls_key_refs in
+							let groups = Hashtbl.create 0 in
+							List.iter (fun (k,v) ->
+								let id = match k with VInstance {ikind=ITls i} -> i | _ -> -1 in
+								let site = try Hashtbl.find tls_sites id with Not_found -> "<unknown site>" in
+								let (cnt,vals) = try Hashtbl.find groups site with Not_found -> (0,[]) in
+								Hashtbl.replace groups site (cnt + 1, Obj.repr v :: vals)
+							) entries;
+							let glist = Hashtbl.fold (fun site (cnt,vals) acc -> (site,cnt,vals) :: acc) groups [] in
+							let prefix = ref [] and prev = ref 0 in
+							let measured = List.map (fun (site,cnt,vals) ->
+								prefix := vals @ !prefix;
+								let cur = Objsize.reachable_bytes_of !prefix in
+								let sz = cur - !prev in
+								prev := cur;
+								(site,cnt,sz)
+							) glist in
+							let measured = List.sort (fun (_,_,a) (_,_,b) -> compare b a) measured in
+							List.map (fun (site,cnt,sz) ->
+								jobject ["name",jstring (Printf.sprintf "[%i] %s" cnt site);"size",jint sz]
+							) measured
+						end in
+						jobject ["name",jstring "macro interpreter";"size",jint (mem_size MacroContext.macro_interp_cache);"child",jarray (count_children @ eventloop_report ~deep:macro_detail interp @ children @ tls_children)]
 					| None ->
 						jobject ["name",jstring "macro interpreter";"size",jint (mem_size MacroContext.macro_interp_cache)];
 					)

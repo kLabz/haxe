@@ -2968,11 +2968,12 @@ module StdTls = struct
 	)
 
 	let set_value = vifun1 (fun vthis v ->
-		ignore (this vthis);
+		ignore (this vthis); (* validate it is a Tls instance *)
 		let eval = get_eval (get_ctx()) in
 		(* keyed weakly by the Tls instance [vthis] so the value is freed when the
 		   instance is GC'd (see EvalContext.TlsStorage). *)
 		TlsStorage.replace eval.eval_storage vthis v;
+		record_tls_site eval vthis;
 		v
 	)
 end
