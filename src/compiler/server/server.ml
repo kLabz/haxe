@@ -284,16 +284,21 @@ module WorkerDomain = struct
 
 	let create sctx rq =
 		let domain = Domain.spawn (fun () ->
-			(* Opt-in: enlarge the minor heap of the COMPILATION domain only (this is the
-			   domain that runs typing/macro/hxb — the source of most short-lived churn that
-			   otherwise gets promoted to the major heap). A per-domain Gc.set here does not
-			   change the default inherited by the parallel pool's worker domains, so it costs
-			   ~minor_heap_size of RSS once, not x(domain count) like OCAMLRUNPARAM s=. *)
-			(try
-				let mb = int_of_string (Sys.getenv "HAXE_MAIN_MINOR_MB") in
-				if mb > 0 then
-					Gc.set { (Gc.get ()) with Gc.minor_heap_size = mb * 1024 * 1024 / (Sys.word_size / 8) }
-			with _ -> ());
+			(* Enlarge the minor heap of the COMPILATION domain only (this is the domain that
+			   runs typing/macro/hxb — the source of most short-lived churn that otherwise gets
+			   promoted to the major heap). A per-domain Gc.set here does NOT change the default
+			   inherited by the parallel pool's worker domains, so it costs ~minor_heap_size of
+			   RSS once, not x(domain count) like OCAMLRUNPARAM s=.
+			   Default 32MB: measured on mog a net RSS win (recompile peak -~7%, lower major
+			   high-water) at negligible idle cost; a U-curve sweep put the knee at ~32-64MB.
+			   Override with HAXE_MAIN_MINOR_MB (in MB); 0 disables. *)
+			let mb =
+				match (try Some (Sys.getenv "HAXE_MAIN_MINOR_MB") with Not_found -> None) with
+				| Some s -> (try int_of_string s with _ -> 32)
+				| None -> 32
+			in
+			if mb > 0 then
+				Gc.set { (Gc.get ()) with Gc.minor_heap_size = mb * 1024 * 1024 / (Sys.word_size / 8) };
 			let cs = sctx.cs in
 			let rec loop () =
 				Semaphore.Counting.acquire rq.semaphore;
