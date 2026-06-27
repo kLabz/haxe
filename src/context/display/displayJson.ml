@@ -20,6 +20,7 @@ let json_of_times root =
 				"info",jstring node.info;
 				"time",jfloat node.time;
 				"alloc",jfloat node.alloc;
+				"promoted",jfloat node.promoted;
 				"calls",jint node.num_calls;
 				"percentTotal",jfloat (if root.time = 0. then 0. else (node.time *. 100. /. root.time));
 				"percentParent",jfloat (if node == root || node.parent.time = 0. then 0. else node.time *. 100. /. node.parent.time);
