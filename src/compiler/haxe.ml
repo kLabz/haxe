@@ -71,13 +71,31 @@ Sys.catch_break true;
    Sys.sigpipe may not map to the real signal number, so use 13 directly. *)
 (try Sys.set_signal 13 Sys.Signal_ignore with _ -> ());
 
-DynamicGc.(setup_dynamic_tuning
-  {
+(* Dynamic GC tuning: space_overhead interpolates from max (heap small) down to
+   min (heap large), trading time for space as the major heap grows.
+   Defaults 100/120 (this runs BEFORE arg parsing, so a -D define can't reach it).
+   Opt-in override via HAXE_SPACE_OVERHEAD: a single int "N" sets both min and max
+   to N; "MIN:MAX" sets them independently (e.g. "60:80"). Lets users/tests pick the
+   space-vs-time tradeoff without rebuilding (same pattern as HAXE_MAIN_MINOR_MB). *)
+DynamicGc.(
+  let default = {
     min_space_overhead = 100;
     max_space_overhead = 120;
     heap_start_worrying_mb = 4_096;
     heap_really_worry_mb = 8_192;
-  });
+  } in
+  let config =
+    match (try Some (Sys.getenv "HAXE_SPACE_OVERHEAD") with Not_found -> None) with
+    | None | Some "" -> default
+    | Some s ->
+      (try
+        match List.map (fun p -> int_of_string (String.trim p)) (String.split_on_char ':' s) with
+        | [v] -> { default with min_space_overhead = v; max_space_overhead = v }
+        | [mn; mx] -> { default with min_space_overhead = mn; max_space_overhead = mx }
+        | _ -> default
+      with _ -> default)
+  in
+  setup_dynamic_tuning config);
 
 let args = List.tl (Array.to_list Sys.argv) in
 set_binary_mode_out stdout true;
