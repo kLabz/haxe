@@ -287,11 +287,25 @@ let create_instance_prototype ctx c =
 	) fields;
 	PrototypeBuilder.finalize pctx
 
+(* (sorted field-id list -> interned prototype name) memo. name is a deterministic
+   function of the field-id set, so this caches the expensive key construction
+   (rev_hash + sprintf + concat + hash) that otherwise ran on EVERY anonymous-object
+   creation, including cache hits. The resulting name is identical to before. *)
+let object_name_cache : (int list,int) Hashtbl.t = Hashtbl.create 0
+
 let get_object_prototype ctx l =
 	let l = List.sort (fun (i1,_) (i2,_) -> if i1 = i2 then 0 else if i1 < i2 then -1 else 1) l in
+	let name =
+		let ids = List.map fst l in
+		try
+			Hashtbl.find object_name_cache ids
+		with Not_found ->
+			let sfields = String.concat "," (List.map (fun i -> Printf.sprintf ":%s" (rev_hash i)) ids) in
+			let name = hash (Printf.sprintf "eval.object.Object[%s]" sfields) in
+			Hashtbl.replace object_name_cache ids name;
+			name
+	in
 	let proto =
-		let sfields = String.concat "," (List.map (fun (i,_) -> (Printf.sprintf ":%s" (rev_hash i))) l) in
-		let name = hash (Printf.sprintf "eval.object.Object[%s]" sfields) in
 		try
 			IntMap.find name ctx.instance_prototypes
 		with Not_found ->
