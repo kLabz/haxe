@@ -73,14 +73,15 @@ Sys.catch_break true;
 
 (* Dynamic GC tuning: space_overhead interpolates from max (heap small) down to
    min (heap large), trading time for space as the major heap grows.
-   Defaults 100/120 (this runs BEFORE arg parsing, so a -D define can't reach it).
+   Default 80/100 (measured: -10.5% peak RSS for +1.6% compile vs the old 100/120;
+   this runs BEFORE arg parsing, so a -D define can't reach it).
    Opt-in override via HAXE_SPACE_OVERHEAD: a single int "N" sets both min and max
    to N; "MIN:MAX" sets them independently (e.g. "60:80"). Lets users/tests pick the
    space-vs-time tradeoff without rebuilding (same pattern as HAXE_MAIN_MINOR_MB). *)
 DynamicGc.(
   let default = {
-    min_space_overhead = 100;
-    max_space_overhead = 120;
+    min_space_overhead = 80;
+    max_space_overhead = 100;
     heap_start_worrying_mb = 4_096;
     heap_really_worry_mb = 8_192;
   } in
