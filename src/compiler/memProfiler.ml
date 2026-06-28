@@ -16,6 +16,11 @@ let sampling_rate = (try float_of_string (Sys.getenv "HAXE_MEMPROF_RATE") with _
 let promoted : (string,int) Hashtbl.t = Hashtbl.create 0
 (* same samples bucketed by source module (complete coverage, not just top sites) *)
 let promoted_by_module : (string,int) Hashtbl.t = Hashtbl.create 0
+(* ALL sampled allocations (not just promoted), by site and by module. This captures
+   churn that dies young too — e.g. the macro phase allocates ~12.5GB but promotes
+   ~0.2GB, so promotion tables alone can't say what that 12.5GB is. *)
+let allocated : (string,int) Hashtbl.t = Hashtbl.create 0
+let allocated_by_module : (string,int) Hashtbl.t = Hashtbl.create 0
 
 (* Top frames of a backtrace, as a one-line key. Drops the leading runtime frames
    and keeps the first few user frames so identical sites group together. *)
@@ -50,9 +55,16 @@ let bt_module lines =
 
 let bump h k = Hashtbl.replace h k (1 + (try Hashtbl.find h k with Not_found -> 0))
 
+let on_alloc a =
+	let bt = a.Gc.Memprof.callstack in
+	let lines = bt_lines bt in
+	bump allocated (bt_key lines);
+	bump allocated_by_module (bt_module lines);
+	Some bt
+
 let tracker : (Printexc.raw_backtrace, Printexc.raw_backtrace) Gc.Memprof.tracker = {
-	Gc.Memprof.alloc_minor = (fun a -> Some a.Gc.Memprof.callstack);
-	alloc_major = (fun a -> Some a.Gc.Memprof.callstack);
+	Gc.Memprof.alloc_minor = on_alloc;
+	alloc_major = on_alloc;
 	promote = (fun bt ->
 		let lines = bt_lines bt in
 		bump promoted (bt_key lines);
@@ -70,27 +82,29 @@ let () =
    sampling => per-sample weight is independent of block size). *)
 let report_and_reset print =
 	if enabled then begin
-		let l = Hashtbl.fold (fun k n acc -> (k,n) :: acc) promoted [] in
-		let l = List.sort (fun (_,a) (_,b) -> compare b a) l in
 		let bytes_per_sample = (float_of_int (Sys.word_size / 8)) /. sampling_rate in
-		let total = List.fold_left (fun acc (_,n) -> acc + n) 0 l in
-		print "";
-		print (Printf.sprintf "PROMOTED-TO-MAJOR BY ALLOCATION SITE (Memprof rate=%g, est ~%.0f MB total):"
-			sampling_rate (float_of_int total *. bytes_per_sample /. 1048576.));
-		List.iteri (fun i (k,n) ->
-			if i < 30 then
-				print (Printf.sprintf "  ~%7.1f MB | %s"
-					(float_of_int n *. bytes_per_sample /. 1048576.) k)
-		) l;
+		let mb n = float_of_int n *. bytes_per_sample /. 1048576. in
+		let sorted h = List.sort (fun (_,a) (_,b) -> compare b a) (Hashtbl.fold (fun k n acc -> (k,n) :: acc) h []) in
+		(* Top-30 hot sites, with the estimated total in the header. *)
+		let print_sites header h =
+			let l = sorted h in
+			let total = List.fold_left (fun acc (_,n) -> acc + n) 0 l in
+			print "";
+			print (Printf.sprintf "%s (Memprof rate=%g, est ~%.0f MB total):" header sampling_rate (mb total));
+			List.iteri (fun i (k,n) -> if i < 30 then print (Printf.sprintf "  ~%7.1f MB | %s" (mb n) k)) l
+		in
 		(* Complete per-module coverage (sums to the total above). *)
-		let lm = Hashtbl.fold (fun k n acc -> (k,n) :: acc) promoted_by_module [] in
-		let lm = List.sort (fun (_,a) (_,b) -> compare b a) lm in
-		print "";
-		print "PROMOTED-TO-MAJOR BY SOURCE MODULE (complete):";
-		List.iter (fun (k,n) ->
-			let mb = float_of_int n *. bytes_per_sample /. 1048576. in
-			if mb >= 1.0 then print (Printf.sprintf "  ~%7.1f MB | %s" mb k)
-		) lm;
+		let print_modules header h =
+			print "";
+			print header;
+			List.iter (fun (k,n) -> if mb n >= 1.0 then print (Printf.sprintf "  ~%7.1f MB | %s" (mb n) k)) (sorted h)
+		in
+		print_sites "PROMOTED-TO-MAJOR BY ALLOCATION SITE" promoted;
+		print_modules "PROMOTED-TO-MAJOR BY SOURCE MODULE (complete):" promoted_by_module;
+		print_sites "ALLOCATED (all, incl. short-lived) BY ALLOCATION SITE" allocated;
+		print_modules "ALLOCATED (all) BY SOURCE MODULE (complete):" allocated_by_module;
 		Hashtbl.clear promoted;
-		Hashtbl.clear promoted_by_module
+		Hashtbl.clear promoted_by_module;
+		Hashtbl.clear allocated;
+		Hashtbl.clear allocated_by_module
 	end
