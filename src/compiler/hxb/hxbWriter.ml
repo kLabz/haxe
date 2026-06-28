@@ -180,8 +180,11 @@ module SimnBuffer = struct
 	}
 
 	let reset sb =
-		sb.buffer <- Bytes.create sb.buffer_size;
-		sb.buffers <- Queue.create ();
+		(* Keep sb.buffer and overwrite it in place (writes start at offset 0 via
+		   unsafe_set/blit); only drop any overflow buffers and rewind. Previously this
+		   allocated a fresh Bytes every reset, defeating the reuse of the scratch
+		   t_instance_chunk (the sole caller) — ~one Bytes.create per type-instance write. *)
+		Queue.clear sb.buffers;
 		sb.offset <- 0
 
 	let promote_buffer sb =
